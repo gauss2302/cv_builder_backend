@@ -85,6 +85,47 @@ func (j *JWT) GenerateRefreshToken(userId, email, role string) (string, error) {
 	return j.generateToken(userId, email, role, TokenTypeRefresh, j.config.RefreshTokenExpiry)
 }
 
+func (j *JWT) GenerateResetToken(userId, email string) (string, error) {
+	return j.generateToken(userId, email, "", TokenTypeReset, j.config.ResetTokenExpiry)
+}
+
+func (j *JWT) ParseToken(tokenString string) (*JWTClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(j.config.Secret), nil
+	})
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, ErrTokenExpired
+		}
+		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+	}
+
+	if !token.Valid {
+		return nil, ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(*JWTClaims)
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+	return claims, nil
+}
+
+func (j *JWT) ValidateResetToken(tokenString string) (*JWTClaims, error) {
+	claims, err := j.ParseToken(tokenString)
+
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeReset {
+		return nil, ErrWrongTokenType
+	}
+	return claims, nil
+}
+
 // token helper
 func (j *JWT) generateToken(userId, email, role, tokenType string, expiry time.Duration) (string, error) {
 	now := time.Now()

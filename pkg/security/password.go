@@ -2,10 +2,12 @@ package security
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"golang.org/x/crypto/argon2"
+	"strings"
 )
 
 var (
@@ -65,4 +67,72 @@ func HashPassword(password string, params *Argon2Params) (string, error) {
 		b64hash,
 	)
 	return encodedHash, nil
+}
+
+func VerifyPassword(password, encodedHash string) (bool, error) {
+	params, salt, hash, err := decodeHash(encodedHash)
+	if err != nil {
+		return false, nil
+	}
+
+	computedHash := argon2.IDKey(
+		[]byte(password),
+		salt,
+		params.Iterators,
+		params.Memory,
+		params.Parallelism,
+		params.KeyLength)
+
+	if subtle.ConstantTimeCompare(hash, computedHash) == 1 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func decodeHash(encodedHash string) (*Argon2Params, []byte, []byte, error) {
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 {
+		return nil, nil, nil, ErrInvalidHash
+	}
+
+	if parts[1] != "argon2id" {
+		return nil, nil, nil, ErrInvalidHash
+	}
+
+	var version int
+
+	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil {
+		return nil, nil, nil, err
+	}
+
+	if version != argon2.Version {
+		return nil, nil, nil, ErrIncompatibleVersion
+	}
+
+	var memory, iterations uint32
+	var parallelism uint8
+
+	if _, err := fmt.Sscanf(parts[3], "m=%d, t=%d, p=%d", &memory, &iterations, &parallelism); err != nil {
+		return nil, nil, nil, err
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	params := &Argon2Params{
+		Memory:      memory,
+		Iterators:   iterations,
+		Parallelism: parallelism,
+		SaltLength:  uint32(len(salt)),
+		KeyLength:   uint32(len(hash)),
+	}
+
+	return params, salt, hash, nil
 }
