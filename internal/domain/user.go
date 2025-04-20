@@ -48,5 +48,6 @@ type UserRepository interface {
 
 	CreatePasswordReset(reset *PasswordReset) error
 	GetPasswordResetByToken(token string) (*PasswordReset, error)
+	MarkPasswordResetUsed(id uuid.UUID) error
 	DeleteExpiredPasswordReset() error
 }

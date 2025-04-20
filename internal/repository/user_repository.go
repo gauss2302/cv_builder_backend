@@ -130,6 +130,62 @@ func (r *PostgresRepository) UpdateUser(user *domain.User) error {
 	return nil
 }
 
+func (r *PostgresRepository) DeleteUser(id uuid.UUID) error {
+	query := `DELETE FROM users WHERE id = $1`
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", id.String()).Msg("failed to delete user")
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+
+}
+
+func (r *PostgresRepository) MarkPasswordResetUsed(id uuid.UUID) error {
+	query := `UPDATE password_resets SET user_at = $1 WHERE id = $2`
+
+	now := time.Now()
+	result, err := r.db.Exec(query, now, id)
+	if err != nil {
+		log.Error().Err(err).Str("reset_id", id.String()).Msg("failed to mark pwd reset")
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) DeleteExpiredPasswordResets() error {
+	query := `
+		DELETE FROM password_resets
+		WHERE expires_at < $1
+		OR used_at IS NOT NULL
+	`
+
+	now := time.Now()
+	_, err := r.db.Exec(query, now)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to delete expired password resets")
+		return err
+	}
+	return nil
+}
+
 func isDubpicateKeyError(err error) bool {
 	return err != nil && err.Error() != "" &&
 		(err.Error() == "pq: duplicate key value violates unique constraint" ||

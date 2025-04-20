@@ -185,3 +185,69 @@ func (s *AuthService) RequestPasswordReset(email string) (string, error) {
 	}
 	return resetToken, nil
 }
+
+func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
+	claims, err := s.jwt.ValidateResetToken(resetToken)
+	if err != nil {
+		if errors.Is(err, auth.ErrTokenExpired) {
+			return ErrExpiredToken
+		}
+		return ErrInvalidToken
+	}
+
+	userId, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid user ID in token")
+		return ErrInvalidToken
+	}
+
+	user, err := s.userRepo.GetUserById(userId)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+
+	reset, err := s.userRepo.GetPasswordResetByToken(resetToken)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return ErrInvalidToken
+		}
+		return err
+	}
+
+	if time.Now().After(reset.ExpiresAt) {
+		return ErrPasswordResetExpired
+	}
+
+	if !reset.UsedAt.IsZero() {
+		return ErrPasswordResetUsed
+	}
+
+	passwordHash, err := security.HashPassword(newPassword, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to hash password")
+		return err
+	}
+
+	user.PasswordHash = passwordHash
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.UpdateUser(user); err != nil {
+		log.Error().Err(err).Msg("Failed to update user password")
+		return err
+	}
+
+	if err := s.userRepo.MarkPasswordResetUsed(reset.ID); err != nil {
+		log.Error().Err(err).Msg("Failed to mark password reset as used")
+		// Continue anyway, just log the error
+	}
+
+	if err := s.userRepo.DeleteUserSessions(user.ID); err != nil {
+		log.Error().Err(err).Msg("Failed to delete user sessions")
+	}
+
+	return nil
+
+}
