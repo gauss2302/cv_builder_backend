@@ -191,3 +191,106 @@ func isDubpicateKeyError(err error) bool {
 		(err.Error() == "pq: duplicate key value violates unique constraint" ||
 			err.Error() == "ERROR: duplicate key value violates unique constraint (SQLSTATE 23505)")
 }
+
+func (r *PostgresRepository) CreateSession(session *domain.Session) error {
+	query := `
+		INSERT INTO sessions (id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURN id
+	`
+
+	if session.ID == uuid.Nil {
+		session.ID = uuid.New()
+	}
+	now := time.Now()
+	if session.CreatedAt.IsZero() {
+		session.CreatedAt = now
+	}
+
+	var id uuid.UUID
+	err := r.db.QueryRow(
+		query,
+		session.ID,
+		session.UserID,
+		session.RefreshToken,
+		session.UserAgent,
+		session.ClientIP,
+		session.ExpiresAt,
+		session.CreatedAt).Scan(&id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to creare session")
+		return err
+	}
+	return nil
+}
+
+func (r *PostgresRepository) GetSessionById(id uuid.UUID) (*domain.Session, error) {
+	query := `
+		SELECT id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at
+		FROM sessions
+		WHERE id = $1
+	`
+
+	var session domain.Session
+	err := r.db.Get(&session, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Str("session_id", id.String()).Msg("failed to get session")
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (r *PostgresRepository) GetSessionByToken(token string) (*domain.Session, error) {
+	query := `
+		SELECT id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at
+		FROM sessions
+		WHERE refresh_token = $1
+	`
+
+	var session domain.Session
+	err := r.db.Get(&session, query, token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Msg("failed to get session by token")
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (r *PostgresRepository) DeleteSession(id uuid.UUID) error {
+	query := `DELETE FROM sessions
+			WHERE id = $1`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Str("session_id", id.String()).Msg("failed to delete session")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresRepository) DeleteUserSessions(userId uuid.UUID) error {
+	query := `DELETE FROM users WHERE user_id = $1`
+
+	_, err := r.db.Exec(query, userId)
+
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userId.String()).Msg("failed to delete user sessions")
+		return err
+	}
+	return nil
+}

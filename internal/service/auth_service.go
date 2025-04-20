@@ -186,6 +186,81 @@ func (s *AuthService) RequestPasswordReset(email string) (string, error) {
 	return resetToken, nil
 }
 
+func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*TokenPair, error) {
+	claims, err := s.jwt.ValidateRefreshToken(refreshToken)
+
+	if err != nil {
+		if errors.Is(err, auth.ErrTokenExpired) {
+			return nil, ErrExpiredToken
+		}
+		return nil, ErrInvalidToken
+	}
+
+	userId, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		log.Error().Err(err).Msg("invalid user id in token")
+		return nil, ErrInvalidToken
+	}
+
+	user, err := s.userRepo.GetUserById(userId)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+
+	session, err := s.userRepo.GetSessionByToken(refreshToken)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrInvalidSession
+		}
+		return nil, err
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		_ = s.userRepo.DeleteSession(session.ID)
+		return nil, ErrExpiredToken
+	}
+
+	newAccessToken, err := s.jwt.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to gen access token")
+		return nil, err
+	}
+
+	newRefreshToken, err := s.jwt.GenerateRefreshToken(user.ID.String(), user.Email, user.Role)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to gen refresh token")
+		return nil, err
+	}
+
+	if err := s.userRepo.DeleteSession(session.ID); err != nil {
+		log.Error().Err(err).Msg("failed to delete old session")
+	}
+
+	newSession := &domain.Session{
+		ID:           uuid.New(),
+		UserID:       user.ID,
+		RefreshToken: newRefreshToken,
+		UserAgent:    userAgent,
+		ClientIP:     clientIp,
+		ExpiresAt:    time.Now().Add(s.config.ResetTokenExpiry),
+		CreatedAt:    time.Now(),
+	}
+
+	if err := s.userRepo.CreateSession(newSession); err != nil {
+		log.Error().Err(err).Msg("failed to create new session")
+	}
+
+	return &TokenPair{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    int64(s.config.AccessTokenExpiry.Seconds()),
+	}, nil
+
+}
+
 func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
 	claims, err := s.jwt.ValidateResetToken(resetToken)
 	if err != nil {
@@ -250,4 +325,16 @@ func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
 
 	return nil
 
+}
+
+func (s *AuthService) ValidateAccessToken(accessToken string) (*auth.JWTClaims, error) {
+	claims, err := s.jwt.ValidateAccessToken(accessToken)
+
+	if err != nil {
+		if errors.Is(err, auth.ErrTokenExpired) {
+			return nil, ErrExpiredToken
+		}
+		return nil, ErrInvalidToken
+	}
+	return claims, err
 }

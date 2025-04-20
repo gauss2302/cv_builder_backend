@@ -126,6 +126,30 @@ func (j *JWT) ValidateResetToken(tokenString string) (*JWTClaims, error) {
 	return claims, nil
 }
 
+func (j *JWT) ValidateAccessToken(tokenString string) (*JWTClaims, error) {
+	claims, err := j.ParseToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeAccess {
+		return nil, ErrWrongTokenType
+	}
+	return claims, err
+}
+
+func (j *JWT) ValidateRefreshToken(tokenString string) (*JWTClaims, error) {
+	claims, err := j.ParseToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.TokenType != TokenTypeRefresh {
+		return nil, ErrWrongTokenType
+	}
+
+	return claims, err
+}
+
 // token helper
 func (j *JWT) generateToken(userId, email, role, tokenType string, expiry time.Duration) (string, error) {
 	now := time.Now()
