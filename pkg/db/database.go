@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"time"
 )
