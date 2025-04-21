@@ -19,6 +19,21 @@ type PostgresRepository struct {
 	db *sqlx.DB
 }
 
+func (r *PostgresRepository) CreatePasswordReset(reset *domain.PasswordReset) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *PostgresRepository) GetPasswordResetByToken(token string) (*domain.PasswordReset, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (r *PostgresRepository) DeleteExpiredPasswordReset() error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewPostgresUserRepository(db *sqlx.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }

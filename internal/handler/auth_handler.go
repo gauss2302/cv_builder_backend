@@ -134,6 +134,152 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	RespondWithJSON(w, http.StatusOK, tokens)
 }
 
+func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	if ok := h.applyRateLimit(w, r); !ok {
+		return
+	}
+
+	var req RefreshTokenRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "invalid req body", "INVALID_REQUEST")
+		return
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		RespondWithValidationError(w, validationErrors)
+		return
+	}
+
+	if err := h.authService.Logout(req.RefreshToken); err != nil {
+		log.Error().Err(err).Msg("failed to logout user")
+		RespondWithError(w, http.StatusInternalServerError, "failed to logout user", "LOGOUT_FAILED")
+		return
+	}
+	RespondWithJSON(w, http.StatusOK, map[string]any{
+		"message": "user logged out success",
+	})
+}
+
+func (h *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+	if ok := h.applyRateLimit(w, r); !ok {
+		return
+	}
+
+	var req RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "invalid body req", "INVALID_REQUEST")
+		return
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		validatonErrors := err.(validator.ValidationErrors)
+		RespondWithValidationError(w, validatonErrors)
+		return
+	}
+
+	userAgent := r.UserAgent()
+	clientIP := getClientIP(r)
+
+	tokens, err := h.authService.RefreshToken(req.RefreshToken, userAgent, clientIP)
+	if err != nil {
+		status := http.StatusUnauthorized
+		code := "INVALID_TOKEN"
+		message := "invalid refresh token"
+
+		if errors.Is(err, errors.New("token expired")) {
+			code = "TOKEN_EXPIRED"
+			message = "Refresh token expired"
+		} else if errors.Is(err, errors.New("invalid session")) {
+			code = "INVALID_SESSION"
+			message = "Invalid session"
+		}
+
+		RespondWithError(w, status, message, code)
+		return
+	}
+	RespondWithJSON(w, http.StatusOK, tokens)
+}
+
+func (h *AuthHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
+	if ok := h.applyRateLimit(w, r); !ok {
+		return
+	}
+
+	var req PasswordResetRequestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "invalid req body", "INVALID_REQUEST")
+		return
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		validaitonErrors := err.(validator.ValidationErrors)
+		RespondWithValidationError(w, validaitonErrors)
+		return
+	}
+
+	resetToken, err := h.authService.RequestPasswordReset(req.Email)
+	if err != nil {
+		if errors.Is(err, errors.New("user not found")) {
+			RespondWithJSON(w, http.StatusOK, map[string]any{
+				"message": "pwd reset instructons sent to email if exists",
+			})
+			return
+		}
+		log.Error().Err(err).Msg("failed to req pwd reset")
+		RespondWithError(w, http.StatusInternalServerError, "failed to req pwd reset", "PASSWORD_RESET_FAILED")
+		return
+	}
+	RespondWithJSON(w, http.StatusOK, map[string]any{
+		"message": "pwd rest instructions sent",
+		"token":   resetToken,
+	})
+}
+
+func (h *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if ok := h.applyRateLimit(w, r); !ok {
+		return
+	}
+
+	var req PasswordResetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "invalid req body", "INVALID_REQUEST")
+		return
+	}
+
+	if err := h.validator.Struct(req); err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		RespondWithValidationError(w, validationErrors)
+		return
+	}
+
+	if err := h.authService.ResetPassword(req.Token, req.NewPassword); err != nil {
+		status := http.StatusBadRequest
+		code := "PASSWORD_RESET_FAILED"
+		message := "Failed to reset password"
+
+		if errors.Is(err, errors.New("invalid token")) {
+			code = "INVALID_TOKEN"
+			message = "Invalid reset token"
+		} else if errors.Is(err, errors.New("token expired")) {
+			code = "TOKEN_EXPIRED"
+			message = "Reset token expired"
+		} else if errors.Is(err, errors.New("password reset already used")) {
+			code = "TOKEN_USED"
+			message = "Reset token already used"
+		}
+
+		RespondWithError(w, status, message, code)
+		return
+	}
+
+	// Return success response
+	RespondWithJSON(w, http.StatusOK, map[string]any{
+		"message": "Password reset successfully",
+	})
+}
+
 func (h *AuthHandler) applyRateLimit(w http.ResponseWriter, r *http.Request) bool {
 	count, err := h.rateLimiter.CheckRateLimit(r.Context(), r)
 	if err != nil {
