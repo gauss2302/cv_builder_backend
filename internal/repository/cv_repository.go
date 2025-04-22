@@ -462,3 +462,845 @@ func (r *PostgresCVRepository) GetEducationByResume(resumeID uuid.UUID) ([]*doma
 
 	return education, nil
 }
+
+func (r *PostgresCVRepository) AddSkill(resumeId uuid.UUID, skill *domain.Skill) (uuid.UUID, error) {
+	query := `
+		INSERT INTO skills (
+			id, resume_id, name, category, proficiency, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
+	`
+
+	skill.BeforeSave()
+
+	if err := skill.Validate(); err != nil {
+		return uuid.Nil, err
+	}
+
+	id := uuid.New()
+	now := time.Now()
+
+	var proficiency any
+	if skill.Proficiency != 0 {
+		proficiency = skill.Proficiency
+	} else {
+		proficiency = nil
+	}
+
+	var returnedID uuid.UUID
+	err := r.db.QueryRow(
+		query,
+		id,
+		resumeId,
+		skill.Name,
+		skill.Category,
+		proficiency,
+		now,
+		now,
+	).Scan(&returnedID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to add skill")
+		return uuid.Nil, err
+	}
+
+	return returnedID, nil
+
+}
+
+func (r *PostgresCVRepository) UpdateSkill(id uuid.UUID, skill *domain.Skill) error {
+	query := `
+		UPDATE skills
+		SET name = $1,
+			category = $2,
+			proficiency = $3,
+			updated_at = $4
+		WHERE id = $5
+	`
+
+	// Apply BeforeSave to sanitize the data
+	skill.BeforeSave()
+
+	// Validate the entry
+	if err := skill.Validate(); err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	// Use NULL for zero proficiency
+	var proficiency any
+	if skill.Proficiency != 0 {
+		proficiency = skill.Proficiency
+	} else {
+		proficiency = nil
+	}
+
+	result, err := r.db.Exec(
+		query,
+		skill.Name,
+		skill.Category,
+		proficiency,
+		now,
+		id,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update skill")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) DeleteSkill(id uuid.UUID) error {
+	query := `
+		DELETE FROM skills
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete skill")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) GetSkill(id uuid.UUID) (*domain.Skill, error) {
+	query := `
+		SELECT name, category, proficiency
+		FROM skills
+		WHERE id = $1
+	`
+
+	var skillRow struct {
+		Name        string `db:"name"`
+		Category    string `db:"category"`
+		Proficiency *int   `db:"proficiency"`
+	}
+
+	err := r.db.Get(&skillRow, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Str("skill_id", id.String()).Msg("failed to get skill")
+		return nil, err
+	}
+
+	skill := &domain.Skill{
+		Name:     skillRow.Name,
+		Category: skillRow.Category,
+	}
+
+	if skillRow.Proficiency != nil {
+		skill.Proficiency = *skillRow.Proficiency
+	}
+
+	return skill, nil
+}
+
+func (r *PostgresCVRepository) GetSkillsByCV(resumeId uuid.UUID) ([]*domain.Skill, error) {
+	query := `
+		SELECT id, name, category, proficiency
+		FROM skills
+		WHERE resume_id = $1
+		ORDER BY category, name
+	`
+
+	type skillRow struct {
+		ID          uuid.UUID `db:"id"`
+		Name        string    `db:"name"`
+		Category    string    `db:"category"`
+		Proficiency *int      `db:"proficiency"`
+	}
+
+	var rows []skillRow
+	err := r.db.Select(&rows, query, resumeId)
+	if err != nil {
+		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get skills by resume")
+		return nil, err
+	}
+
+	skills := make([]*domain.Skill, len(rows))
+
+	for i, row := range rows {
+		skills[i] = &domain.Skill{Name: row.Name, Category: row.Category}
+		if row.Proficiency != nil {
+			skills[i].Proficiency = *row.Proficiency
+		}
+	}
+	return skills, nil
+
+}
+
+func (r *PostgresCVRepository) AddProject(resumeId uuid.UUID, project *domain.Project) (uuid.UUID, error) {
+	query := `
+		INSERT INTO projects (
+			id, resume_id, name, description, repo_url, demo_url, 
+			start_date, end_date, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id
+	`
+
+	project.BeforeSave()
+
+	if err := project.Validate(); err != nil {
+		return uuid.Nil, err
+	}
+
+	id := uuid.New()
+	now := time.Now()
+
+	var startDate *time.Time
+	var endDate *time.Time
+
+	if project.StartDate != "" && project.StartDate != "Present" {
+		parsedStartDate, err := time.Parse("2006-01-02", project.StartDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		startDate = &parsedStartDate
+	}
+
+	if project.EndDate != "" && project.EndDate != "Present" {
+		parsedEndDate, err := time.Parse("2006-01-02", project.EndDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		endDate = &parsedEndDate
+	}
+
+	tx, err := r.db.Beginx()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to begin transaction")
+		return uuid.Nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var returnedId uuid.UUID
+	err = tx.QueryRow(
+		query,
+		id,
+		resumeId,
+		project.Name,
+		project.Description,
+		project.RepoURL,
+		project.DemoURL,
+		startDate,
+		endDate,
+		now,
+		now,
+	).Scan(&returnedId)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to add project")
+		return uuid.Nil, err
+	}
+
+	for _, tech := range project.Technologies {
+		err := r.addProjectTechnology(tx, id, tech)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to add project technology")
+			return uuid.Nil, err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("failed to commit transaction")
+		return uuid.Nil, err
+	}
+
+	return returnedId, nil
+}
+
+// helper
+func (r *PostgresCVRepository) addProjectTechnology(tx *sqlx.Tx, projectId uuid.UUID, technology string) error {
+	query := `
+		INSERT INTO project_technologies (id, project_id, technology)
+		VALUES ($1, $2, $3)
+	`
+
+	id := uuid.New()
+	_, err := tx.Exec(query, id, projectId, technology)
+	return err
+}
+
+func (r *PostgresCVRepository) UpdateProject(id uuid.UUID, project *domain.Project) error {
+	query := `
+		UPDATE projects
+		SET name = $1,
+			description = $2,
+			repo_url = $3,
+			demo_url = $4,
+			start_date = $5,
+			end_date = $6,
+			updated_at = $7
+		WHERE id = $8
+	`
+
+	// Apply BeforeSave to sanitize the data
+	project.BeforeSave()
+
+	// Validate the entry
+	if err := project.Validate(); err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	// Parse dates
+	var startDate *time.Time
+	var endDate *time.Time
+
+	if project.StartDate != "" && project.StartDate != "Present" {
+		parsedStartDate, err := time.Parse("2006-01-02", project.StartDate)
+		if err != nil {
+			return err
+		}
+		startDate = &parsedStartDate
+	}
+
+	if project.EndDate != "" && project.EndDate != "Present" {
+		parsedEndDate, err := time.Parse("2006-01-02", project.EndDate)
+		if err != nil {
+			return err
+		}
+		endDate = &parsedEndDate
+	}
+
+	tx, err := r.db.Beginx()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to begin transaction")
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	result, err := tx.Exec(
+		query,
+		project.Name,
+		project.Description,
+		project.RepoURL,
+		project.DemoURL,
+		startDate,
+		endDate,
+		now,
+		id,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update project")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	// Delete existing technologies
+	_, err = tx.Exec("DELETE FROM project_technologies WHERE project_id = $1", id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete project technologies")
+		return err
+	}
+
+	// Add updated technologies
+	for _, tech := range project.Technologies {
+		err = r.addProjectTechnology(tx, id, tech)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to add project technology")
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("failed to commit transaction")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) DeleteProject(id uuid.UUID) error {
+	query := `
+		DELETE FROM projects
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete project")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) GetProject(id uuid.UUID) (*domain.Project, error) {
+	query := `
+		SELECT name, description, repo_url, demo_url, start_date, end_date
+		FROM projects
+		WHERE id = $1
+	`
+
+	var projectRow struct {
+		Name        string     `db:"name"`
+		Description string     `db:"description"`
+		RepoURL     string     `db:"repo_url"`
+		DemoURL     string     `db:"demo_url"`
+		StartDate   *time.Time `db:"start_date"`
+		EndDate     *time.Time `db:"end_date"`
+	}
+
+	err := r.db.Get(&projectRow, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Str("project_id", id.String()).Msg("Failed to get project")
+		return nil, err
+	}
+
+	// Format dates
+	var startDate, endDate string
+	if projectRow.StartDate != nil {
+		startDate = projectRow.StartDate.Format("2006-01-02")
+	}
+	if projectRow.EndDate != nil {
+		endDate = projectRow.EndDate.Format("2006-01-02")
+	} else {
+		endDate = "Present"
+	}
+
+	// Get technologies
+	technologies, err := r.GetProjectTechnologies(id)
+	if err != nil {
+		log.Error().Err(err).Str("project_id", id.String()).Msg("failed to get project technologies")
+		return nil, err
+	}
+
+	project := &domain.Project{
+		Name:         projectRow.Name,
+		Description:  projectRow.Description,
+		RepoURL:      projectRow.RepoURL,
+		DemoURL:      projectRow.DemoURL,
+		StartDate:    startDate,
+		EndDate:      endDate,
+		Technologies: technologies,
+	}
+
+	return project, nil
+}
+
+func (r *PostgresCVRepository) GetProjectByCV(resumeId uuid.UUID) ([]*domain.Project, error) {
+	query := `
+		SELECT id, name, description, repo_url, demo_url, start_date, end_date
+		FROM projects
+		WHERE resume_id = $1
+		ORDER BY COALESCE(start_date, '9999-12-31') DESC
+	`
+	type projectRow struct {
+		ID          uuid.UUID  `db:"id"`
+		Name        string     `db:"name"`
+		Description string     `db:"description"`
+		RepoURL     string     `db:"repo_url"`
+		DemoURL     string     `db:"demo_url"`
+		StartDate   *time.Time `db:"start_date"`
+		EndDate     *time.Time `db:"end_date"`
+	}
+
+	var rows []projectRow
+	err := r.db.Select(&rows, query, resumeId)
+	if err != nil {
+		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get projects by resume")
+		return nil, err
+	}
+
+	projects := make([]*domain.Project, len(rows))
+
+	for i, row := range rows {
+		var startDate, endDate string
+		if row.StartDate != nil {
+			startDate = row.StartDate.Format("2006-01-02")
+		}
+		if row.EndDate != nil {
+			endDate = row.EndDate.Format("2006-01-02")
+		} else {
+			endDate = "Present"
+		}
+
+		technologies, err := r.GetProjectTechnologies(row.ID)
+
+		if err != nil {
+			log.Error().Err(err).Str("project_id", row.ID.String()).Msg("failed to get project technologies")
+			continue
+		}
+
+		projects[i] = &domain.Project{Name: row.Name,
+			Description:  row.Description,
+			RepoURL:      row.RepoURL,
+			DemoURL:      row.DemoURL,
+			StartDate:    startDate,
+			EndDate:      endDate,
+			Technologies: technologies,
+		}
+	}
+	return projects, nil
+}
+
+func (r *PostgresCVRepository) AddProjectTechnology(projectId uuid.UUID, technology string) error {
+	query := `
+		INSERT INTO project_technologies (id, project_id, technology)
+		VALUES ($1, $2, $3)
+	`
+
+	id := uuid.New()
+	_, err := r.db.Exec(query, id, projectId, technology)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to add project tech")
+	}
+	return nil
+}
+
+func (r *PostgresCVRepository) GetProjectTechnologies(projectId uuid.UUID) ([]string, error) {
+	query := `
+		SELECT technology
+		FROM project_technologies
+		WHERE project_id = $1
+		ORDER BY technology
+	`
+
+	var technologies []string
+	err := r.db.Select(&technologies, query, projectId)
+	if err != nil {
+		log.Error().Err(err).Str("project_id", projectId.String()).Msg("failed to get project technologies")
+		return nil, err
+	}
+
+	return technologies, nil
+}
+
+func (r *PostgresCVRepository) DeleteProjectTechnology(projectId uuid.UUID, technology string) error {
+	query := `
+		DELETE FROM project_technologies
+		WHERE project_id = $1 AND technology = $2
+	`
+
+	result, err := r.db.Exec(query, projectId, technology)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete project technology")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) AddCertification(resumeId uuid.UUID, certification *domain.Certification) (uuid.UUID, error) {
+	query := `
+		INSERT INTO certifications (
+			id, resume_id, name, issuer, issue_date, 
+			expiry_date, credential_id, url, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id
+	`
+
+	// Apply BeforeSave to sanitize the data
+	certification.BeforeSave()
+
+	// Validate the entry
+	if err := certification.Validate(); err != nil {
+		return uuid.Nil, err
+	}
+
+	id := uuid.New()
+	now := time.Now()
+
+	// Parse dates
+	var issueDate *time.Time
+	var expiryDate *time.Time
+
+	if certification.IssueDate != "" {
+		parsedIssueDate, err := time.Parse("2006-01-02", certification.IssueDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		issueDate = &parsedIssueDate
+	}
+
+	if certification.ExpiryDate != "" && certification.ExpiryDate != "No Expiration" {
+		parsedExpiryDate, err := time.Parse("2006-01-02", certification.ExpiryDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		expiryDate = &parsedExpiryDate
+	}
+
+	var returnedID uuid.UUID
+	err := r.db.QueryRow(
+		query,
+		id,
+		resumeId,
+		certification.Name,
+		certification.Issuer,
+		issueDate,
+		expiryDate,
+		certification.CredentialID,
+		certification.URL,
+		now,
+		now,
+	).Scan(&returnedID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to add certification")
+		return uuid.Nil, err
+	}
+
+	return returnedID, nil
+}
+
+func (r *PostgresCVRepository) UpdateCertification(id uuid.UUID, certification *domain.Certification) error {
+	query := `
+		UPDATE certifications
+		SET name = $1,
+			issuer = $2,
+			issue_date = $3,
+			expiry_date = $4,
+			credential_id = $5,
+			url = $6,
+			updated_at = $7
+		WHERE id = $8
+	`
+
+	// Apply BeforeSave to sanitize the data
+	certification.BeforeSave()
+
+	// Validate the entry
+	if err := certification.Validate(); err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	// Parse dates
+	var issueDate *time.Time
+	var expiryDate *time.Time
+
+	if certification.IssueDate != "" {
+		parsedIssueDate, err := time.Parse("2006-01-02", certification.IssueDate)
+		if err != nil {
+			return err
+		}
+		issueDate = &parsedIssueDate
+	}
+
+	if certification.ExpiryDate != "" && certification.ExpiryDate != "No Expiration" {
+		parsedExpiryDate, err := time.Parse("2006-01-02", certification.ExpiryDate)
+		if err != nil {
+			return err
+		}
+		expiryDate = &parsedExpiryDate
+	}
+
+	result, err := r.db.Exec(
+		query,
+		certification.Name,
+		certification.Issuer,
+		issueDate,
+		expiryDate,
+		certification.CredentialID,
+		certification.URL,
+		now,
+		id,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update certification")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) DeleteCertification(id uuid.UUID) error {
+	query := `
+		DELETE FROM certifications
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete certification")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) GetCertification(id uuid.UUID) (*domain.Certification, error) {
+	query := `
+		SELECT name, issuer, issue_date, expiry_date, credential_id, url
+		FROM certifications
+		WHERE id = $1
+	`
+
+	var certRow struct {
+		Name         string     `db:"name"`
+		Issuer       string     `db:"issuer"`
+		IssueDate    time.Time  `db:"issue_date"`
+		ExpiryDate   *time.Time `db:"expiry_date"`
+		CredentialID string     `db:"credential_id"`
+		URL          string     `db:"url"`
+	}
+
+	err := r.db.Get(&certRow, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Str("certification_id", id.String()).Msg("failed to get certification")
+		return nil, err
+	}
+
+	// Format dates
+	issueDate := certRow.IssueDate.Format("2006-01-02")
+	var expiryDate string
+	if certRow.ExpiryDate != nil {
+		expiryDate = certRow.ExpiryDate.Format("2006-01-02")
+	} else {
+		expiryDate = "No Expiration"
+	}
+
+	certification := &domain.Certification{
+		Name:         certRow.Name,
+		Issuer:       certRow.Issuer,
+		IssueDate:    issueDate,
+		ExpiryDate:   expiryDate,
+		CredentialID: certRow.CredentialID,
+		URL:          certRow.URL,
+	}
+
+	return certification, nil
+}
+
+func (r *PostgresCVRepository) GetCertificationsByResume(resumeId uuid.UUID) ([]*domain.Certification, error) {
+	query := `
+		SELECT id, name, issuer, issue_date, expiry_date, credential_id, url
+		FROM certifications
+		WHERE resume_id = $1
+		ORDER BY issue_date DESC
+	`
+
+	type certRow struct {
+		ID           uuid.UUID  `db:"id"`
+		Name         string     `db:"name"`
+		Issuer       string     `db:"issuer"`
+		IssueDate    time.Time  `db:"issue_date"`
+		ExpiryDate   *time.Time `db:"expiry_date"`
+		CredentialID string     `db:"credential_id"`
+		URL          string     `db:"url"`
+	}
+
+	var rows []certRow
+	err := r.db.Select(&rows, query, resumeId)
+	if err != nil {
+		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("Failed to get certifications by resume")
+		return nil, err
+	}
+
+	certifications := make([]*domain.Certification, len(rows))
+	for i, row := range rows {
+		// Format dates
+		issueDate := row.IssueDate.Format("2006-01-02")
+		var expiryDate string
+		if row.ExpiryDate != nil {
+			expiryDate = row.ExpiryDate.Format("2006-01-02")
+		} else {
+			expiryDate = "No Expiration"
+		}
+
+		certifications[i] = &domain.Certification{
+			Name:         row.Name,
+			Issuer:       row.Issuer,
+			IssueDate:    issueDate,
+			ExpiryDate:   expiryDate,
+			CredentialID: row.CredentialID,
+			URL:          row.URL,
+		}
+	}
+
+	return certifications, nil
+}
