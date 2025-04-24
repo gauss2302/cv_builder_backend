@@ -47,7 +47,7 @@ func GetUserIdFromContext(ctx context.Context) (uuid.UUID, error) {
 	claims, ok := ctx.Value(claimsContentKey).(*auth.JWTClaims)
 
 	if !ok {
-		return uuid.Nil, errors.New("no clain,s in context")
+		return uuid.Nil, errors.New("no claims in context")
 	}
 
 	userId, err := uuid.Parse(claims.UserID)
@@ -56,4 +56,12 @@ func GetUserIdFromContext(ctx context.Context) (uuid.UUID, error) {
 	}
 
 	return userId, nil
+}
+
+func GetClaimsFromContext(ctx context.Context) (*auth.JWTClaims, error) {
+	claims, ok := ctx.Value(claimsContentKey).(*auth.JWTClaims)
+	if !ok {
+		return nil, errors.New("no claims in context")
+	}
+	return claims, nil
 }

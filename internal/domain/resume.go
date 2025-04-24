@@ -40,9 +40,9 @@ type ResumeRepository interface {
 	GetExperience(id uuid.UUID) (*Experience, error)
 	GetExperienceByResume(resumeID uuid.UUID) ([]*Experience, error)
 
-	//AddSkill(resumeID uuid.UUID, skill *Skill) (uuid.UUID, error)
-	//UpdateSkill(id uuid.UUID, skill *Skill) error
-	//DeleteSkill(id uuid.UUID) error
-	//GetSkill(id uuid.UUID) (*Skill, error)
-	//GetSkillsByResume(resumeID uuid.UUID) ([]*Skill, error)
+	AddSkill(resumeID uuid.UUID, skill *Skill) (uuid.UUID, error)
+	UpdateSkill(id uuid.UUID, skill *Skill) error
+	DeleteSkill(id uuid.UUID) error
+	GetSkill(id uuid.UUID) (*Skill, error)
+	GetSkillsByCV(resumeID uuid.UUID) ([]*Skill, error)
 }
