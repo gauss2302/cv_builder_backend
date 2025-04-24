@@ -1304,3 +1304,260 @@ func (r *PostgresCVRepository) GetCertificationsByResume(resumeId uuid.UUID) ([]
 
 	return certifications, nil
 }
+
+// Experience
+func (r *PostgresCVRepository) AddExperience(resumeId uuid.UUID, experience *domain.Experience) (uuid.UUID, error) {
+	query := `
+		INSERT INTO experience (
+			id, resume_id, employer, job_title, location, 
+			start_date, end_date, description, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id
+	`
+
+	experience.BeforeSave()
+
+	if err := experience.Validate(); err != nil {
+		return uuid.Nil, err
+	}
+
+	id := uuid.New()
+	now := time.Now()
+
+	var startDate *time.Time
+	var endDate *time.Time
+
+	if experience.StartDate != "" {
+		parsedStartDate, err := time.Parse("2006-01-02", experience.StartDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		startDate = &parsedStartDate
+	}
+
+	if experience.EndDate != "" && experience.EndDate != "Present" {
+		parsedEndDate, err := time.Parse("2006-01-02", experience.EndDate)
+		if err != nil {
+			return uuid.Nil, err
+		}
+		endDate = &parsedEndDate
+	}
+
+	var returnedId uuid.UUID
+	err := r.db.QueryRow(
+		query,
+		id,
+		resumeId,
+		experience.Employer,
+		experience.JobTitle,
+		experience.Location,
+		startDate,
+		endDate,
+		experience.Description,
+		now,
+		now).Scan(&returnedId)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to add experience")
+	}
+
+	if len(experience.Achievements) > 0 {
+		// TODO: Add achievements in a separate table if needed
+	}
+
+	return returnedId, nil
+}
+
+func (r *PostgresCVRepository) UpdateExperience(id uuid.UUID, experience *domain.Experience) error {
+	query := `
+		UPDATE experience
+		SET employer = $1,
+			job_title = $2,
+			location = $3,
+			start_date = $4,
+			end_date = $5,
+			description = $6,
+			updated_at = $7
+		WHERE id = $8
+	`
+
+	experience.BeforeSave()
+
+	if err := experience.Validate(); err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	// Parse dates
+	var startDate *time.Time
+	var endDate *time.Time
+
+	if experience.StartDate != "" {
+		parsedStartDate, err := time.Parse("2006-01-02", experience.StartDate)
+		if err != nil {
+			return err
+		}
+		startDate = &parsedStartDate
+	}
+
+	if experience.EndDate != "" && experience.EndDate != "Present" {
+		parsedEndDate, err := time.Parse("2006-01-02", experience.EndDate)
+		if err != nil {
+			return err
+		}
+		endDate = &parsedEndDate
+	}
+
+	result, err := r.db.Exec(
+		query,
+		experience.Employer,
+		experience.JobTitle,
+		experience.Location,
+		startDate,
+		endDate,
+		experience.Description,
+		now,
+		id)
+
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update experience")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) DeleteExperience(id uuid.UUID) error {
+	query := `
+		DELETE FROM experience
+		WHERE id = $1
+	`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete experience")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *PostgresCVRepository) GetExperience(id uuid.UUID) (*domain.Experience, error) {
+	query := `
+		SELECT employer, job_title, location, 
+		       start_date, end_date, description
+		FROM experience
+		WHERE id = $1
+	`
+
+	var exp struct {
+		Employer    string     `db:"employer"`
+		JobTitle    string     `db:"job_title"`
+		Location    string     `db:"location"`
+		StartDate   time.Time  `db:"start_date"`
+		EndDate     *time.Time `db:"end_date"`
+		Description string     `db:"description"`
+	}
+
+	err := r.db.Get(&exp, query, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		log.Error().Err(err).Str("experience_id", id.String()).Msg("failed to get experience")
+		return nil, err
+	}
+
+	startDate := exp.StartDate.Format("2006-01-02")
+	var endDate string
+	if exp.EndDate != nil {
+		endDate = exp.EndDate.Format("2006-01-02")
+	} else {
+		endDate = "Present"
+	}
+
+	experience := &domain.Experience{
+		Employer:     exp.Employer,
+		JobTitle:     exp.JobTitle,
+		Location:     exp.Location,
+		StartDate:    startDate,
+		EndDate:      endDate,
+		Description:  exp.Description,
+		Achievements: []string{},
+	}
+
+	return experience, err
+}
+
+func (r *PostgresCVRepository) GetExperienceByResume(resumeId uuid.UUID) ([]*domain.Experience, error) {
+	query := `
+		SELECT id, employer, job_title, location, 
+		       start_date, end_date, description
+		FROM experience
+		WHERE resume_id = $1
+		ORDER BY start_date DESC
+	`
+
+	type experienceRow struct {
+		ID          uuid.UUID  `db:"id"`
+		Employer    string     `db:"employer"`
+		JobTitle    string     `db:"job_title"`
+		Location    string     `db:"location"`
+		StartDate   time.Time  `db:"start_date"`
+		EndDate     *time.Time `db:"end_date"`
+		Description string     `db:"description"`
+	}
+
+	var rows []experienceRow
+	err := r.db.Select(&rows, query, resumeId)
+	if err != nil {
+		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("Failed to get experience by resume")
+		return nil, err
+	}
+
+	experience := make([]*domain.Experience, len(rows))
+
+	for i, row := range rows {
+		startDate := row.StartDate.Format("2006-01-02")
+		var endDate string
+		if row.EndDate != nil {
+			endDate = row.EndDate.Format("2006-01-02")
+		} else {
+			endDate = "Present"
+		}
+
+		experience[i] = &domain.Experience{
+			Employer:    row.Employer,
+			JobTitle:    row.JobTitle,
+			Location:    row.Location,
+			StartDate:   startDate,
+			EndDate:     endDate,
+			Description: row.Description,
+			// Fetch achievements if needed
+			Achievements: []string{},
+		}
+	}
+
+	return experience, nil
+}
