@@ -1561,3 +1561,29 @@ func (r *PostgresCVRepository) GetExperienceByResume(resumeId uuid.UUID) ([]*dom
 
 	return experience, nil
 }
+
+// Get Complete Resume
+func (r *PostgresCVRepository) GetCompleteResume(resumeId uuid.UUID) (*domain.Resume, error) {
+	resume, err := r.GetCVById(resumeId)
+	if err != nil {
+		return nil, err
+	}
+
+	personalInfo, err := r.GetPersonalInfo(resumeId)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return nil, err
+	}
+
+	if personalInfo != nil {
+		resume.PersonalInfo = personalInfo
+	}
+
+	education, err := r.GetEducationByResume(resumeId)
+	if err != nil {
+		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get education")
+	} else {
+		resume.Education = education
+	}
+
+	return nil, nil
+}

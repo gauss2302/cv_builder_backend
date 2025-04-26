@@ -45,4 +45,14 @@ type ResumeRepository interface {
 	DeleteSkill(id uuid.UUID) error
 	GetSkill(id uuid.UUID) (*Skill, error)
 	GetSkillsByCV(resumeID uuid.UUID) ([]*Skill, error)
+
+	// Certification operations
+	AddCertification(resumeID uuid.UUID, certification *Certification) (uuid.UUID, error)
+	UpdateCertification(id uuid.UUID, certification *Certification) error
+	DeleteCertification(id uuid.UUID) error
+	GetCertification(id uuid.UUID) (*Certification, error)
+	GetCertificationsByResume(resumeID uuid.UUID) ([]*Certification, error)
+
+	// Complete resume operations
+	GetCompleteResume(resumeID uuid.UUID) (*Resume, error)
 }
