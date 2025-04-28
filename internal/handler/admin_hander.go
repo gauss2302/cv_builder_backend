@@ -15,7 +15,7 @@ func NewAdminHandler(userRepo domain.UserRepository) *AdminHandler {
 	}
 }
 
-func (h *AdminHandler) GeUsersHandler(w http.ResponseWriter, r *http.Request) {
+func (h *AdminHandler) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Not Authorized", "UNAUTHORIZED")
