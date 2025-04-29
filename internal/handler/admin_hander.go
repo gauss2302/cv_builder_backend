@@ -18,11 +18,13 @@ func NewAdminHandler(userRepo domain.UserRepository) *AdminHandler {
 func (h *AdminHandler) GetUsersHandler(w http.ResponseWriter, r *http.Request) {
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
-		RespondWithError(w, http.StatusUnauthorized, "Not Authorized", "UNAUTHORIZED")
+		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
 		return
 	}
 
-	RespondWithJSON(w, http.StatusOK, map[string]any{"message": "Admin route accessed successfully",
+	RespondWithJSON(w, http.StatusOK, map[string]any{
+		"message":  "Admin route accessed successfully",
 		"admin_id": claims.UserID,
-		"email":    claims.Email})
+		"email":    claims.Email,
+	})
 }

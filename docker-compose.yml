@@ -61,6 +61,19 @@ services:
       retries: 5
       start_period: 10s
 
+  migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: [ "goose", "-dir", "./migrations", "postgres", "$$DB_URL", "up" ]
+    volumes:
+      - ./migrations:/app/migrations
+    environment:
+      - DB_URL=postgres://postgres:postgres@db:5432/cv_builder?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

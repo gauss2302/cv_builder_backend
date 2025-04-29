@@ -107,12 +107,13 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		RespondWithError(w, http.StatusBadRequest, "invalid request body", "IVALID_REQUEST")
+		RespondWithError(w, http.StatusBadRequest, "invalid request body", "INVALID_REQUEST")
 		return
 	}
 
 	if err := h.validator.Struct(req); err != nil {
-		validationErrors := err.(validator.ValidationErrors)
+		var validationErrors validator.ValidationErrors
+		errors.As(err, &validationErrors)
 		RespondWithValidationError(w, validationErrors)
 		return
 	}
@@ -123,7 +124,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	tokens, err := h.authService.Login(req.Email, req.Password, userAgent, clientIP)
 
 	if err != nil {
-		if errors.Is(err, errors.New("invalid credentials")) {
+		if errors.Is(err, errors.New("invalid credentials!")) {
 			RespondWithError(w, http.StatusUnauthorized, "invalid email or pwd", "LOGIN_FAILED")
 			return
 		}
