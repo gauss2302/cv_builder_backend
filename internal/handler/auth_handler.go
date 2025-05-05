@@ -101,16 +101,19 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+	// Apply rate limiting
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
 
+	// Parse request body
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		RespondWithError(w, http.StatusBadRequest, "invalid request body", "INVALID_REQUEST")
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body", "INVALID_REQUEST")
 		return
 	}
 
+	// Validate request
 	if err := h.validator.Struct(req); err != nil {
 		var validationErrors validator.ValidationErrors
 		errors.As(err, &validationErrors)
@@ -118,20 +121,24 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get client info
 	userAgent := r.UserAgent()
 	clientIP := getClientIP(r)
 
+	// Login user
 	tokens, err := h.authService.Login(req.Email, req.Password, userAgent, clientIP)
-
 	if err != nil {
-		if errors.Is(err, errors.New("invalid credentials!")) {
-			RespondWithError(w, http.StatusUnauthorized, "invalid email or pwd", "LOGIN_FAILED")
+		if errors.Is(err, errors.New("invalid credentials!!")) {
+			// Return same error for invalid email or password to prevent user enumeration
+			RespondWithError(w, http.StatusUnauthorized, "Invalid email or password", "INVALID_CREDENTIALS")
 			return
 		}
-		log.Error().Err(err).Msg("failed to login user")
-		RespondWithError(w, http.StatusInternalServerError, "failed to login user", "LOGIN_FAILED")
+		log.Error().Err(err).Msg("Failed to login user")
+		RespondWithError(w, http.StatusInternalServerError, "Failed to login user", "LOGIN_FAILED")
 		return
 	}
+
+	// Return tokens
 	RespondWithJSON(w, http.StatusOK, tokens)
 }
 

@@ -72,7 +72,7 @@ func HashPassword(password string, params *Argon2Params) (string, error) {
 func VerifyPassword(password, encodedHash string) (bool, error) {
 	params, salt, hash, err := decodeHash(encodedHash)
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
 	computedHash := argon2.IDKey(
@@ -109,10 +109,10 @@ func decodeHash(encodedHash string) (*Argon2Params, []byte, []byte, error) {
 		return nil, nil, nil, ErrIncompatibleVersion
 	}
 
-	var memory, iterations uint32
+	var memory, iterators uint32
 	var parallelism uint8
 
-	if _, err := fmt.Sscanf(parts[3], "m=%d, t=%d, p=%d", &memory, &iterations, &parallelism); err != nil {
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &iterators, &parallelism); err != nil {
 		return nil, nil, nil, err
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
@@ -128,7 +128,7 @@ func decodeHash(encodedHash string) (*Argon2Params, []byte, []byte, error) {
 
 	params := &Argon2Params{
 		Memory:      memory,
-		Iterators:   iterations,
+		Iterators:   iterators,
 		Parallelism: parallelism,
 		SaltLength:  uint32(len(salt)),
 		KeyLength:   uint32(len(hash)),

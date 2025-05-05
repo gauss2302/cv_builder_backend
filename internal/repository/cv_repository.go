@@ -14,6 +14,11 @@ type PostgresCVRepository struct {
 	db *sqlx.DB
 }
 
+func (r *PostgresCVRepository) GetProjectsByResume(resumeId uuid.UUID) ([]*domain.Project, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewPostgresCVRepository(db *sqlx.DB) *PostgresCVRepository {
 	return &PostgresCVRepository{
 		db: db,

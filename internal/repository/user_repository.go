@@ -101,12 +101,11 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*domain.User, error) 
 
 	var user domain.User
 	err := r.db.Get(&user, query, email)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		log.Error().Err(err).Str("email", email).Msg("failed to get user by email")
+		log.Error().Err(err).Str("email", email).Msg("Failed to get user by email")
 		return nil, err
 	}
 
@@ -211,7 +210,7 @@ func (r *PostgresRepository) CreateSession(session *domain.Session) error {
 	query := `
 		INSERT INTO sessions (id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURN id
+		RETURNING id
 	`
 
 	if session.ID == uuid.Nil {

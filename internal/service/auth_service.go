@@ -105,13 +105,13 @@ func (s *AuthService) Login(email, password, userAgent, clientIP string) (*Token
 
 	accessToken, err := s.jwt.GenerateAccessToken(user.ID.String(), user.Email, user.Role)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to generate access token")
+		log.Error().Err(err).Msg("Failed to generate access token")
 		return nil, err
 	}
 
 	refreshToken, err := s.jwt.GenerateRefreshToken(user.ID.String(), user.Email, user.Role)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to generate refresh token")
+		log.Error().Err(err).Msg("Failed to generate refresh token")
 		return nil, err
 	}
 
@@ -126,7 +126,7 @@ func (s *AuthService) Login(email, password, userAgent, clientIP string) (*Token
 	}
 
 	if err := s.userRepo.CreateSession(session); err != nil {
-		log.Error().Err(err).Msg("failed to create session")
+		log.Error().Err(err).Msg("Failed to create session")
 		return nil, err
 	}
 
