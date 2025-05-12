@@ -872,7 +872,7 @@ func (h *ResumeHandler) GetProjectsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	projects, err := h.resumeRepo.GetProjectsByResume(resumeUUID)
+	projects, err := h.resumeRepo.GetProjectByCV(resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get projects", "INTERNAL_SERVER_ERROR")
 		return
