@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"time"
@@ -193,4 +194,23 @@ func (s *Session) decrypt(encryptedData string) ([]byte, error) {
 	}
 
 	return plaintext, nil
+}
+
+func (s *Session) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sessionData, err := s.Get(r)
+		if err != nil {
+			if errors.Is(err, ErrSessionDecryption) || errors.Is(err, ErrInvalidSession) ||
+				err.Error() == "session expired" {
+				s.Clear(w)
+				log.Info().Msg("Cleared invalid session")
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		ctx := SetSessionContext(r.Context(), sessionData)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+
 }

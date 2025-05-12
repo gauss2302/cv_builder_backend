@@ -56,7 +56,6 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// SecurityMiddleware combines all security middleware
 func SecurityMiddleware(csrfProtection *CSRFProtection, session *Session, rateLimiter *RateLimiter, validator *Validator) Middleware {
 	securityHeaders := SecurityHeaders(DefaultHeadersConfig())
 

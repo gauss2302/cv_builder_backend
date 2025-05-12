@@ -3,6 +3,7 @@ package security
 import (
 	"errors"
 	"github.com/microcosm-cc/bluemonday"
+	"github.com/rs/zerolog/log"
 	"io"
 	"mime"
 	"net/http"
@@ -104,4 +105,48 @@ func (v *Validator) SanitizeMap(input map[string]string) map[string]string {
 		result[k] = v.SanitizeHTML(val)
 	}
 	return result
+}
+
+func (v *Validator) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := v.ValidateContentType(r); err != nil {
+			log.Error().Err(err).
+				Str("content_type", r.Header.Get("Content-Type")).
+				Msg("Invalid Content-Type")
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+			w.Write([]byte(`{"error":"Unsupported Content-Type","status":415}`))
+			return
+		}
+
+		if r.Method != http.MethodGet && r.Method != http.MethodHead &&
+			r.Method != http.MethodOptions && r.Method != http.MethodTrace {
+
+			originalBody := r.Body
+			limitedBody, err := v.LimitBodySize(r)
+			if err != nil {
+				if errors.Is(err, ErrBodyTooLarge) {
+					log.Error().Err(err).Msg("Request body too large")
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusRequestEntityTooLarge)
+					w.Write([]byte(`{"error":"Request body too large","status":413}`))
+					return
+				}
+
+				log.Error().Err(err).Msg("Error reading request body")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error":"Error reading request body","status":400}`))
+				return
+			}
+
+			if limitedBody != nil {
+				r.Body = io.NopCloser(strings.NewReader(string(limitedBody)))
+			} else {
+				r.Body = originalBody
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
