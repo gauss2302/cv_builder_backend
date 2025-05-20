@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"cv_builder/internal/domain"
 	"cv_builder/internal/repository"
 	"cv_builder/pkg/auth"
@@ -47,8 +48,8 @@ func NewAuthService(userRepo domain.UserRepository, jwt *auth.JWT, config AuthSe
 	}
 }
 
-func (s *AuthService) Register(email, password, role string) (*domain.User, error) {
-	existingUser, err := s.userRepo.GetUserByEmail(email)
+func (s *AuthService) Register(ctx context.Context, email, password, role string) (*domain.User, error) {
+	existingUser, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err == nil && existingUser != nil {
 		return nil, ErrUserAlreadyExists
 	} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -70,7 +71,7 @@ func (s *AuthService) Register(email, password, role string) (*domain.User, erro
 		UpdatedAt:    time.Now(),
 	}
 
-	if err := s.userRepo.CreateUser(user); err != nil {
+	if err := s.userRepo.CreateUser(ctx, user); err != nil {
 		log.Error().Err(err).Msg("failed to create user")
 		if errors.Is(err, repository.ErrConflict) {
 			return nil, ErrUserAlreadyExists
@@ -82,8 +83,8 @@ func (s *AuthService) Register(email, password, role string) (*domain.User, erro
 
 }
 
-func (s *AuthService) Login(email, password, userAgent, clientIP string) (*TokenPair, error) {
-	user, err := s.userRepo.GetUserByEmail(email)
+func (s *AuthService) Login(ctx context.Context, email, password, userAgent, clientIP string) (*TokenPair, error) {
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -125,7 +126,7 @@ func (s *AuthService) Login(email, password, userAgent, clientIP string) (*Token
 		CreatedAt:    time.Now(),
 	}
 
-	if err := s.userRepo.CreateSession(session); err != nil {
+	if err := s.userRepo.CreateSession(ctx, session); err != nil {
 		log.Error().Err(err).Msg("Failed to create session")
 		return nil, err
 	}
@@ -137,8 +138,8 @@ func (s *AuthService) Login(email, password, userAgent, clientIP string) (*Token
 	}, nil
 }
 
-func (s *AuthService) Logout(refreshToken string) error {
-	session, err := s.userRepo.GetSessionByToken(refreshToken)
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	session, err := s.userRepo.GetSessionByToken(ctx, refreshToken)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -147,16 +148,16 @@ func (s *AuthService) Logout(refreshToken string) error {
 		return err
 	}
 
-	return s.userRepo.DeleteSession(session.ID)
+	return s.userRepo.DeleteSession(ctx, session.ID)
 }
 
-func (s *AuthService) LogoutAll(userId uuid.UUID) error {
-	return s.userRepo.DeleteUserSessions(userId)
+func (s *AuthService) LogoutAll(ctx context.Context, userId uuid.UUID) error {
+	return s.userRepo.DeleteUserSessions(ctx, userId)
 }
 
-func (s *AuthService) RequestPasswordReset(email string) (string, error) {
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
 
-	user, err := s.userRepo.GetUserByEmail(email)
+	user, err := s.userRepo.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return "", ErrUserNotFound
@@ -180,13 +181,13 @@ func (s *AuthService) RequestPasswordReset(email string) (string, error) {
 		CreatedAt: time.Now(),
 	}
 
-	if err := s.userRepo.CreatePasswordReset(reset); err != nil {
+	if err := s.userRepo.CreatePasswordReset(ctx, reset); err != nil {
 		log.Error().Err(err).Msg("failed to create pwd reset")
 	}
 	return resetToken, nil
 }
 
-func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*TokenPair, error) {
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken, userAgent, clientIp string) (*TokenPair, error) {
 	claims, err := s.jwt.ValidateRefreshToken(refreshToken)
 
 	if err != nil {
@@ -202,7 +203,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 		return nil, ErrInvalidToken
 	}
 
-	user, err := s.userRepo.GetUserById(userId)
+	user, err := s.userRepo.GetUserById(ctx, userId)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, ErrUserNotFound
@@ -210,7 +211,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 		return nil, err
 	}
 
-	session, err := s.userRepo.GetSessionByToken(refreshToken)
+	session, err := s.userRepo.GetSessionByToken(ctx, refreshToken)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, ErrInvalidSession
@@ -219,7 +220,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 	}
 
 	if time.Now().After(session.ExpiresAt) {
-		_ = s.userRepo.DeleteSession(session.ID)
+		_ = s.userRepo.DeleteSession(ctx, session.ID)
 		return nil, ErrExpiredToken
 	}
 
@@ -235,7 +236,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 		return nil, err
 	}
 
-	if err := s.userRepo.DeleteSession(session.ID); err != nil {
+	if err := s.userRepo.DeleteSession(ctx, session.ID); err != nil {
 		log.Error().Err(err).Msg("failed to delete old session")
 	}
 
@@ -249,7 +250,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 		CreatedAt:    time.Now(),
 	}
 
-	if err := s.userRepo.CreateSession(newSession); err != nil {
+	if err := s.userRepo.CreateSession(ctx, newSession); err != nil {
 		log.Error().Err(err).Msg("failed to create new session")
 	}
 
@@ -261,7 +262,7 @@ func (s *AuthService) RefreshToken(refreshToken, userAgent, clientIp string) (*T
 
 }
 
-func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
+func (s *AuthService) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
 	claims, err := s.jwt.ValidateResetToken(resetToken)
 	if err != nil {
 		if errors.Is(err, auth.ErrTokenExpired) {
@@ -276,7 +277,7 @@ func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
 		return ErrInvalidToken
 	}
 
-	user, err := s.userRepo.GetUserById(userId)
+	user, err := s.userRepo.GetUserById(ctx, userId)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrUserNotFound
@@ -284,7 +285,7 @@ func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
 		return err
 	}
 
-	reset, err := s.userRepo.GetPasswordResetByToken(resetToken)
+	reset, err := s.userRepo.GetPasswordResetByToken(ctx, resetToken)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return ErrInvalidToken
@@ -309,17 +310,17 @@ func (s *AuthService) ResetPassword(resetToken, newPassword string) error {
 	user.PasswordHash = passwordHash
 	user.UpdatedAt = time.Now()
 
-	if err := s.userRepo.UpdateUser(user); err != nil {
+	if err := s.userRepo.UpdateUser(ctx, user); err != nil {
 		log.Error().Err(err).Msg("Failed to update user password")
 		return err
 	}
 
-	if err := s.userRepo.MarkPasswordResetUsed(reset.ID); err != nil {
+	if err := s.userRepo.MarkPasswordResetUsed(ctx, reset.ID); err != nil {
 		log.Error().Err(err).Msg("Failed to mark password reset as used")
 		// Continue anyway, just log the error
 	}
 
-	if err := s.userRepo.DeleteUserSessions(user.ID); err != nil {
+	if err := s.userRepo.DeleteUserSessions(ctx, user.ID); err != nil {
 		log.Error().Err(err).Msg("Failed to delete user sessions")
 	}
 

@@ -22,6 +22,7 @@ func NewUserHandler(userRepo domain.UserRepository, resumeRepo domain.ResumeRepo
 }
 
 func (h *UserHandler) GetProfileHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Not Authorized", "UNAUTHORIZED")
@@ -34,7 +35,7 @@ func (h *UserHandler) GetProfileHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := h.userRepo.GetUserById(userId)
+	user, err := h.userRepo.GetUserById(ctx, userId)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "User not found", "NOT_FOUND")
@@ -44,7 +45,7 @@ func (h *UserHandler) GetProfileHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	resumes, err := h.resumeRepo.GetCVByUserId(userId)
+	resumes, err := h.resumeRepo.GetCVByUserId(ctx, userId)
 	if err != nil {
 		log.Error().Err(err).Str("user_id", userId.String()).Msg("Failed to get user resumes")
 		// Continue without resumes

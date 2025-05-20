@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"cv_builder/internal/domain"
 	"database/sql"
 	"errors"
@@ -19,17 +20,17 @@ type PostgresRepository struct {
 	db *sqlx.DB
 }
 
-func (r *PostgresRepository) CreatePasswordReset(reset *domain.PasswordReset) error {
+func (r *PostgresRepository) CreatePasswordReset(ctx context.Context, reset *domain.PasswordReset) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *PostgresRepository) GetPasswordResetByToken(token string) (*domain.PasswordReset, error) {
+func (r *PostgresRepository) GetPasswordResetByToken(ctx context.Context, token string) (*domain.PasswordReset, error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *PostgresRepository) DeleteExpiredPasswordReset() error {
+func (r *PostgresRepository) DeleteExpiredPasswordReset(ctx context.Context) error {
 	//TODO implement me
 	panic("implement me")
 }
@@ -38,7 +39,7 @@ func NewPostgresUserRepository(db *sqlx.DB) *PostgresRepository {
 	return &PostgresRepository{db: db}
 }
 
-func (r *PostgresRepository) CreateUser(user *domain.User) error {
+func (r *PostgresRepository) CreateUser(ctx context.Context, user *domain.User) error {
 	query := `
 		INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -61,7 +62,7 @@ func (r *PostgresRepository) CreateUser(user *domain.User) error {
 	}
 
 	var id uuid.UUID
-	err := r.db.QueryRow(query, user.ID, user.Email, user.PasswordHash, user.Role, user.CreatedAt, user.UpdatedAt).Scan(&id)
+	err := r.db.QueryRowContext(ctx, query, user.ID, user.Email, user.PasswordHash, user.Role, user.CreatedAt, user.UpdatedAt).Scan(&id)
 	if err != nil {
 		if isDubpicateKeyError(err) {
 			log.Error().Err(err).Str("email", user.Email).Msg("cannot create user with the same email")
@@ -73,7 +74,7 @@ func (r *PostgresRepository) CreateUser(user *domain.User) error {
 	return nil
 }
 
-func (r *PostgresRepository) GetUserById(id uuid.UUID) (*domain.User, error) {
+func (r *PostgresRepository) GetUserById(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, role, created_at, updated_at
 		FROM users
@@ -81,7 +82,7 @@ func (r *PostgresRepository) GetUserById(id uuid.UUID) (*domain.User, error) {
 	`
 
 	var user domain.User
-	err := r.db.Get(&user, query, id)
+	err := r.db.GetContext(ctx, &user, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -92,7 +93,7 @@ func (r *PostgresRepository) GetUserById(id uuid.UUID) (*domain.User, error) {
 	return &user, nil
 }
 
-func (r *PostgresRepository) GetUserByEmail(email string) (*domain.User, error) {
+func (r *PostgresRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, role, created_at, updated_at
 		FROM users
@@ -100,7 +101,7 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*domain.User, error) 
 	`
 
 	var user domain.User
-	err := r.db.Get(&user, query, email)
+	err := r.db.GetContext(ctx, &user, query, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -112,7 +113,7 @@ func (r *PostgresRepository) GetUserByEmail(email string) (*domain.User, error) 
 	return &user, nil
 }
 
-func (r *PostgresRepository) UpdateUser(user *domain.User) error {
+func (r *PostgresRepository) UpdateUser(ctx context.Context, user *domain.User) error {
 	query := `
 		UPDATE users
 		SET email = $1, password_hash = $2, role = $3, updated_at = $4
@@ -121,7 +122,8 @@ func (r *PostgresRepository) UpdateUser(user *domain.User) error {
 
 	user.UpdatedAt = time.Now()
 
-	result, err := r.db.Exec(
+	result, err := r.db.ExecContext(
+		ctx,
 		query,
 		user.Email, user.PasswordHash, user.Role, user.UpdatedAt, user.ID)
 	if err != nil {
@@ -144,9 +146,9 @@ func (r *PostgresRepository) UpdateUser(user *domain.User) error {
 	return nil
 }
 
-func (r *PostgresRepository) DeleteUser(id uuid.UUID) error {
+func (r *PostgresRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM users WHERE id = $1`
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Str("user_id", id.String()).Msg("failed to delete user")
 		return err
@@ -164,11 +166,11 @@ func (r *PostgresRepository) DeleteUser(id uuid.UUID) error {
 
 }
 
-func (r *PostgresRepository) MarkPasswordResetUsed(id uuid.UUID) error {
+func (r *PostgresRepository) MarkPasswordResetUsed(ctx context.Context, id uuid.UUID) error {
 	query := `UPDATE password_resets SET user_at = $1 WHERE id = $2`
 
 	now := time.Now()
-	result, err := r.db.Exec(query, now, id)
+	result, err := r.db.ExecContext(ctx, query, now, id)
 	if err != nil {
 		log.Error().Err(err).Str("reset_id", id.String()).Msg("failed to mark pwd reset")
 		return err
@@ -184,7 +186,7 @@ func (r *PostgresRepository) MarkPasswordResetUsed(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresRepository) DeleteExpiredPasswordResets() error {
+func (r *PostgresRepository) DeleteExpiredPasswordResets(ctx context.Context) error {
 	query := `
 		DELETE FROM password_resets
 		WHERE expires_at < $1
@@ -192,7 +194,7 @@ func (r *PostgresRepository) DeleteExpiredPasswordResets() error {
 	`
 
 	now := time.Now()
-	_, err := r.db.Exec(query, now)
+	_, err := r.db.ExecContext(ctx, query, now)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to delete expired password resets")
 		return err
@@ -206,7 +208,7 @@ func isDubpicateKeyError(err error) bool {
 			err.Error() == "ERROR: duplicate key value violates unique constraint (SQLSTATE 23505)")
 }
 
-func (r *PostgresRepository) CreateSession(session *domain.Session) error {
+func (r *PostgresRepository) CreateSession(ctx context.Context, session *domain.Session) error {
 	query := `
 		INSERT INTO sessions (id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -222,7 +224,8 @@ func (r *PostgresRepository) CreateSession(session *domain.Session) error {
 	}
 
 	var id uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		session.ID,
 		session.UserID,
@@ -238,7 +241,7 @@ func (r *PostgresRepository) CreateSession(session *domain.Session) error {
 	return nil
 }
 
-func (r *PostgresRepository) GetSessionById(id uuid.UUID) (*domain.Session, error) {
+func (r *PostgresRepository) GetSessionById(ctx context.Context, id uuid.UUID) (*domain.Session, error) {
 	query := `
 		SELECT id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at
 		FROM sessions
@@ -246,7 +249,7 @@ func (r *PostgresRepository) GetSessionById(id uuid.UUID) (*domain.Session, erro
 	`
 
 	var session domain.Session
-	err := r.db.Get(&session, query, id)
+	err := r.db.GetContext(ctx, &session, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -257,7 +260,7 @@ func (r *PostgresRepository) GetSessionById(id uuid.UUID) (*domain.Session, erro
 	return &session, nil
 }
 
-func (r *PostgresRepository) GetSessionByToken(token string) (*domain.Session, error) {
+func (r *PostgresRepository) GetSessionByToken(ctx context.Context, token string) (*domain.Session, error) {
 	query := `
 		SELECT id, user_id, refresh_token, user_agent, client_ip, expires_at, created_at
 		FROM sessions
@@ -265,7 +268,7 @@ func (r *PostgresRepository) GetSessionByToken(token string) (*domain.Session, e
 	`
 
 	var session domain.Session
-	err := r.db.Get(&session, query, token)
+	err := r.db.GetContext(ctx, &session, query, token)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -276,11 +279,11 @@ func (r *PostgresRepository) GetSessionByToken(token string) (*domain.Session, e
 	return &session, nil
 }
 
-func (r *PostgresRepository) DeleteSession(id uuid.UUID) error {
+func (r *PostgresRepository) DeleteSession(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM sessions
 			WHERE id = $1`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Str("session_id", id.String()).Msg("failed to delete session")
 		return err
@@ -297,10 +300,10 @@ func (r *PostgresRepository) DeleteSession(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresRepository) DeleteUserSessions(userId uuid.UUID) error {
+func (r *PostgresRepository) DeleteUserSessions(ctx context.Context, userId uuid.UUID) error {
 	query := `DELETE FROM users WHERE user_id = $1`
 
-	_, err := r.db.Exec(query, userId)
+	_, err := r.db.ExecContext(ctx, query, userId)
 
 	if err != nil {
 		log.Error().Err(err).Str("user_id", userId.String()).Msg("failed to delete user sessions")

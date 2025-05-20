@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"cv_builder/internal/domain"
 	"database/sql"
 	"errors"
@@ -25,7 +26,7 @@ func NewPostgresCVRepository(db *sqlx.DB) *PostgresCVRepository {
 	}
 }
 
-func (r *PostgresCVRepository) CreateCV(userId uuid.UUID) (*domain.Resume, error) {
+func (r *PostgresCVRepository) CreateCV(ctx context.Context, userId uuid.UUID) (*domain.Resume, error) {
 	query := `
 		INSERT INTO resumes (id, user_id, created_at)
 		VALUES ($1, $2, $3)
@@ -36,12 +37,9 @@ func (r *PostgresCVRepository) CreateCV(userId uuid.UUID) (*domain.Resume, error
 	now := time.Now()
 
 	var id uuid.UUID
-	err := r.db.QueryRow(
-		query,
-		resumeID,
-		userId,
-		now,
-	).Scan(&id)
+
+	err := r.db.QueryRowContext(ctx, query, resumeID, userId, now).Scan(&id)
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create resume")
 		return nil, err
@@ -56,7 +54,7 @@ func (r *PostgresCVRepository) CreateCV(userId uuid.UUID) (*domain.Resume, error
 	return resume, nil
 }
 
-func (r *PostgresCVRepository) GetCVById(id uuid.UUID) (*domain.Resume, error) {
+func (r *PostgresCVRepository) GetCVById(ctx context.Context, id uuid.UUID) (*domain.Resume, error) {
 	query := `
 		SELECT id, user_id, created_at
 		FROM resumes
@@ -64,7 +62,7 @@ func (r *PostgresCVRepository) GetCVById(id uuid.UUID) (*domain.Resume, error) {
 	`
 
 	var resume domain.Resume
-	err := r.db.Get(&resume, query, id)
+	err := r.db.GetContext(ctx, &resume, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -76,7 +74,7 @@ func (r *PostgresCVRepository) GetCVById(id uuid.UUID) (*domain.Resume, error) {
 	return &resume, nil
 }
 
-func (r *PostgresCVRepository) GetCVByUserId(userId uuid.UUID) ([]*domain.Resume, error) {
+func (r *PostgresCVRepository) GetCVByUserId(ctx context.Context, userId uuid.UUID) ([]*domain.Resume, error) {
 	query := `
 		SELECT id, user_id, created_at
 		FROM resumes
@@ -85,7 +83,7 @@ func (r *PostgresCVRepository) GetCVByUserId(userId uuid.UUID) ([]*domain.Resume
 	`
 
 	var resumes []*domain.Resume
-	err := r.db.Select(&resumes, query, userId)
+	err := r.db.SelectContext(ctx, &resumes, query, userId)
 	if err != nil {
 		log.Error().Err(err).Str("user_id", userId.String()).Msg("Failed to get resumes by user ID")
 		return nil, err
@@ -94,13 +92,13 @@ func (r *PostgresCVRepository) GetCVByUserId(userId uuid.UUID) ([]*domain.Resume
 	return resumes, nil
 }
 
-func (r *PostgresCVRepository) DeleteCV(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteCV(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM resumes
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", id.String()).Msg("Failed to delete resume")
 		return err
@@ -119,7 +117,7 @@ func (r *PostgresCVRepository) DeleteCV(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) SavePersonalInfo(resumeID uuid.UUID, info *domain.PersonalInfo) error {
+func (r *PostgresCVRepository) SavePersonalInfo(ctx context.Context, resumeID uuid.UUID, info *domain.PersonalInfo) error {
 	query := `
 		INSERT INTO personal_info (
 			id, resume_id, first_name, last_name, email, phone, 
@@ -146,7 +144,8 @@ func (r *PostgresCVRepository) SavePersonalInfo(resumeID uuid.UUID, info *domain
 	now := time.Now()
 
 	var returnedID uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeID,
@@ -169,7 +168,7 @@ func (r *PostgresCVRepository) SavePersonalInfo(resumeID uuid.UUID, info *domain
 	return nil
 }
 
-func (r *PostgresCVRepository) GetPersonalInfo(resumeId uuid.UUID) (*domain.PersonalInfo, error) {
+func (r *PostgresCVRepository) GetPersonalInfo(ctx context.Context, resumeId uuid.UUID) (*domain.PersonalInfo, error) {
 	query := `
 		SELECT first_name, last_name, email, phone, street, city, country, job_title
 		FROM personal_info
@@ -187,7 +186,7 @@ func (r *PostgresCVRepository) GetPersonalInfo(resumeId uuid.UUID) (*domain.Pers
 		JobTitle  string `db:"job_title"`
 	}
 
-	err := r.db.Get(&info, query, resumeId)
+	err := r.db.GetContext(ctx, &info, query, resumeId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -211,7 +210,7 @@ func (r *PostgresCVRepository) GetPersonalInfo(resumeId uuid.UUID) (*domain.Pers
 	return result, nil
 }
 
-func (r *PostgresCVRepository) AddEducation(resumeId uuid.UUID, education *domain.Education) (uuid.UUID, error) {
+func (r *PostgresCVRepository) AddEducation(ctx context.Context, resumeId uuid.UUID, education *domain.Education) (uuid.UUID, error) {
 	query := `
 		INSERT INTO education (
 			id, resume_id, institution, location, degree, field, 
@@ -249,7 +248,8 @@ func (r *PostgresCVRepository) AddEducation(resumeId uuid.UUID, education *domai
 	}
 
 	var returnedId uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeId,
@@ -271,7 +271,7 @@ func (r *PostgresCVRepository) AddEducation(resumeId uuid.UUID, education *domai
 	return returnedId, nil
 }
 
-func (r *PostgresCVRepository) UpdateEducation(id uuid.UUID, education *domain.Education) error {
+func (r *PostgresCVRepository) UpdateEducation(ctx context.Context, id uuid.UUID, education *domain.Education) error {
 	query := `
 		UPDATE education
 		SET institution = $1,
@@ -312,7 +312,8 @@ func (r *PostgresCVRepository) UpdateEducation(id uuid.UUID, education *domain.E
 		endDate = &parsedEndDate
 	}
 
-	result, err := r.db.Exec(
+	result, err := r.db.ExecContext(
+		ctx,
 		query,
 		education.Institution,
 		education.Location,
@@ -342,13 +343,13 @@ func (r *PostgresCVRepository) UpdateEducation(id uuid.UUID, education *domain.E
 	return nil
 }
 
-func (r *PostgresCVRepository) DeleteEducation(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteEducation(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM education
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete education")
 		return err
@@ -367,7 +368,7 @@ func (r *PostgresCVRepository) DeleteEducation(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) GetEducation(id uuid.UUID) (*domain.Education, error) {
+func (r *PostgresCVRepository) GetEducation(ctx context.Context, id uuid.UUID) (*domain.Education, error) {
 	query := `
 		SELECT institution, location, degree, field, 
 		       start_date, end_date, description
@@ -385,7 +386,7 @@ func (r *PostgresCVRepository) GetEducation(id uuid.UUID) (*domain.Education, er
 		Description string     `db:"description"`
 	}
 
-	err := r.db.Get(&edu, query, id)
+	err := r.db.GetContext(ctx, &edu, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -416,7 +417,7 @@ func (r *PostgresCVRepository) GetEducation(id uuid.UUID) (*domain.Education, er
 	return education, nil
 }
 
-func (r *PostgresCVRepository) GetEducationByResume(resumeID uuid.UUID) ([]*domain.Education, error) {
+func (r *PostgresCVRepository) GetEducationByResume(ctx context.Context, resumeID uuid.UUID) ([]*domain.Education, error) {
 	query := `
 		SELECT id, institution, location, degree, field, 
 		       start_date, end_date, description
@@ -437,7 +438,7 @@ func (r *PostgresCVRepository) GetEducationByResume(resumeID uuid.UUID) ([]*doma
 	}
 
 	var rows []educationRow
-	err := r.db.Select(&rows, query, resumeID)
+	err := r.db.SelectContext(ctx, &rows, query, resumeID)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeID.String()).Msg("Failed to get education by resume")
 		return nil, err
@@ -468,7 +469,7 @@ func (r *PostgresCVRepository) GetEducationByResume(resumeID uuid.UUID) ([]*doma
 	return education, nil
 }
 
-func (r *PostgresCVRepository) AddSkill(resumeId uuid.UUID, skill *domain.Skill) (uuid.UUID, error) {
+func (r *PostgresCVRepository) AddSkill(ctx context.Context, resumeId uuid.UUID, skill *domain.Skill) (uuid.UUID, error) {
 	query := `
 		INSERT INTO skills (
 			id, resume_id, name, category, proficiency, created_at, updated_at
@@ -494,7 +495,8 @@ func (r *PostgresCVRepository) AddSkill(resumeId uuid.UUID, skill *domain.Skill)
 	}
 
 	var returnedID uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeId,
@@ -513,7 +515,7 @@ func (r *PostgresCVRepository) AddSkill(resumeId uuid.UUID, skill *domain.Skill)
 
 }
 
-func (r *PostgresCVRepository) UpdateSkill(id uuid.UUID, skill *domain.Skill) error {
+func (r *PostgresCVRepository) UpdateSkill(ctx context.Context, id uuid.UUID, skill *domain.Skill) error {
 	query := `
 		UPDATE skills
 		SET name = $1,
@@ -541,7 +543,8 @@ func (r *PostgresCVRepository) UpdateSkill(id uuid.UUID, skill *domain.Skill) er
 		proficiency = nil
 	}
 
-	result, err := r.db.Exec(
+	result, err := r.db.ExecContext(
+		ctx,
 		query,
 		skill.Name,
 		skill.Category,
@@ -567,13 +570,13 @@ func (r *PostgresCVRepository) UpdateSkill(id uuid.UUID, skill *domain.Skill) er
 	return nil
 }
 
-func (r *PostgresCVRepository) DeleteSkill(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteSkill(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM skills
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete skill")
 		return err
@@ -592,7 +595,7 @@ func (r *PostgresCVRepository) DeleteSkill(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) GetSkill(id uuid.UUID) (*domain.Skill, error) {
+func (r *PostgresCVRepository) GetSkill(ctx context.Context, id uuid.UUID) (*domain.Skill, error) {
 	query := `
 		SELECT name, category, proficiency
 		FROM skills
@@ -605,7 +608,7 @@ func (r *PostgresCVRepository) GetSkill(id uuid.UUID) (*domain.Skill, error) {
 		Proficiency *int   `db:"proficiency"`
 	}
 
-	err := r.db.Get(&skillRow, query, id)
+	err := r.db.GetContext(ctx, &skillRow, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -626,7 +629,7 @@ func (r *PostgresCVRepository) GetSkill(id uuid.UUID) (*domain.Skill, error) {
 	return skill, nil
 }
 
-func (r *PostgresCVRepository) GetSkillsByCV(resumeId uuid.UUID) ([]*domain.Skill, error) {
+func (r *PostgresCVRepository) GetSkillsByCV(ctx context.Context, resumeId uuid.UUID) ([]*domain.Skill, error) {
 	query := `
 		SELECT id, name, category, proficiency
 		FROM skills
@@ -642,7 +645,7 @@ func (r *PostgresCVRepository) GetSkillsByCV(resumeId uuid.UUID) ([]*domain.Skil
 	}
 
 	var rows []skillRow
-	err := r.db.Select(&rows, query, resumeId)
+	err := r.db.SelectContext(ctx, &rows, query, resumeId)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get skills by resume")
 		return nil, err
@@ -660,7 +663,7 @@ func (r *PostgresCVRepository) GetSkillsByCV(resumeId uuid.UUID) ([]*domain.Skil
 
 }
 
-func (r *PostgresCVRepository) AddProject(resumeId uuid.UUID, project *domain.Project) (uuid.UUID, error) {
+func (r *PostgresCVRepository) AddProject(ctx context.Context, resumeId uuid.UUID, project *domain.Project) (uuid.UUID, error) {
 	query := `
 		INSERT INTO projects (
 			id, resume_id, name, description, repo_url, demo_url, 
@@ -711,7 +714,8 @@ func (r *PostgresCVRepository) AddProject(resumeId uuid.UUID, project *domain.Pr
 	}()
 
 	var returnedId uuid.UUID
-	err = tx.QueryRow(
+	err = tx.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeId,
@@ -730,7 +734,7 @@ func (r *PostgresCVRepository) AddProject(resumeId uuid.UUID, project *domain.Pr
 	}
 
 	for _, tech := range project.Technologies {
-		err := r.addProjectTechnology(tx, id, tech)
+		err := r.addProjectTechnology(ctx, tx, id, tech)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to add project technology")
 			return uuid.Nil, err
@@ -746,18 +750,18 @@ func (r *PostgresCVRepository) AddProject(resumeId uuid.UUID, project *domain.Pr
 }
 
 // helper
-func (r *PostgresCVRepository) addProjectTechnology(tx *sqlx.Tx, projectId uuid.UUID, technology string) error {
+func (r *PostgresCVRepository) addProjectTechnology(ctx context.Context, tx *sqlx.Tx, projectId uuid.UUID, technology string) error {
 	query := `
 		INSERT INTO project_technologies (id, project_id, technology)
 		VALUES ($1, $2, $3)
 	`
 
 	id := uuid.New()
-	_, err := tx.Exec(query, id, projectId, technology)
+	_, err := tx.ExecContext(ctx, query, id, projectId, technology)
 	return err
 }
 
-func (r *PostgresCVRepository) UpdateProject(id uuid.UUID, project *domain.Project) error {
+func (r *PostgresCVRepository) UpdateProject(ctx context.Context, id uuid.UUID, project *domain.Project) error {
 	query := `
 		UPDATE projects
 		SET name = $1,
@@ -811,7 +815,8 @@ func (r *PostgresCVRepository) UpdateProject(id uuid.UUID, project *domain.Proje
 		}
 	}()
 
-	result, err := tx.Exec(
+	result, err := tx.ExecContext(
+		ctx,
 		query,
 		project.Name,
 		project.Description,
@@ -846,7 +851,7 @@ func (r *PostgresCVRepository) UpdateProject(id uuid.UUID, project *domain.Proje
 
 	// Add updated technologies
 	for _, tech := range project.Technologies {
-		err = r.addProjectTechnology(tx, id, tech)
+		err = r.addProjectTechnology(ctx, tx, id, tech)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to add project technology")
 			return err
@@ -861,13 +866,13 @@ func (r *PostgresCVRepository) UpdateProject(id uuid.UUID, project *domain.Proje
 	return nil
 }
 
-func (r *PostgresCVRepository) DeleteProject(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteProject(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM projects
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete project")
 		return err
@@ -886,7 +891,7 @@ func (r *PostgresCVRepository) DeleteProject(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) GetProject(id uuid.UUID) (*domain.Project, error) {
+func (r *PostgresCVRepository) GetProject(ctx context.Context, id uuid.UUID) (*domain.Project, error) {
 	query := `
 		SELECT name, description, repo_url, demo_url, start_date, end_date
 		FROM projects
@@ -902,7 +907,7 @@ func (r *PostgresCVRepository) GetProject(id uuid.UUID) (*domain.Project, error)
 		EndDate     *time.Time `db:"end_date"`
 	}
 
-	err := r.db.Get(&projectRow, query, id)
+	err := r.db.GetContext(ctx, &projectRow, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -923,7 +928,7 @@ func (r *PostgresCVRepository) GetProject(id uuid.UUID) (*domain.Project, error)
 	}
 
 	// Get technologies
-	technologies, err := r.GetProjectTechnologies(id)
+	technologies, err := r.GetProjectTechnologies(ctx, id)
 	if err != nil {
 		log.Error().Err(err).Str("project_id", id.String()).Msg("failed to get project technologies")
 		return nil, err
@@ -942,7 +947,7 @@ func (r *PostgresCVRepository) GetProject(id uuid.UUID) (*domain.Project, error)
 	return project, nil
 }
 
-func (r *PostgresCVRepository) GetProjectByCV(resumeId uuid.UUID) ([]*domain.Project, error) {
+func (r *PostgresCVRepository) GetProjectByCV(ctx context.Context, resumeId uuid.UUID) ([]*domain.Project, error) {
 	query := `
 		SELECT id, name, description, repo_url, demo_url, start_date, end_date
 		FROM projects
@@ -960,7 +965,7 @@ func (r *PostgresCVRepository) GetProjectByCV(resumeId uuid.UUID) ([]*domain.Pro
 	}
 
 	var rows []projectRow
-	err := r.db.Select(&rows, query, resumeId)
+	err := r.db.SelectContext(ctx, &rows, query, resumeId)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get projects by resume")
 		return nil, err
@@ -979,7 +984,7 @@ func (r *PostgresCVRepository) GetProjectByCV(resumeId uuid.UUID) ([]*domain.Pro
 			endDate = "Present"
 		}
 
-		technologies, err := r.GetProjectTechnologies(row.ID)
+		technologies, err := r.GetProjectTechnologies(ctx, row.ID)
 
 		if err != nil {
 			log.Error().Err(err).Str("project_id", row.ID.String()).Msg("failed to get project technologies")
@@ -998,21 +1003,21 @@ func (r *PostgresCVRepository) GetProjectByCV(resumeId uuid.UUID) ([]*domain.Pro
 	return projects, nil
 }
 
-func (r *PostgresCVRepository) AddProjectTechnology(projectId uuid.UUID, technology string) error {
+func (r *PostgresCVRepository) AddProjectTechnology(ctx context.Context, projectId uuid.UUID, technology string) error {
 	query := `
 		INSERT INTO project_technologies (id, project_id, technology)
 		VALUES ($1, $2, $3)
 	`
 
 	id := uuid.New()
-	_, err := r.db.Exec(query, id, projectId, technology)
+	_, err := r.db.ExecContext(ctx, query, id, projectId, technology)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to add project tech")
 	}
 	return nil
 }
 
-func (r *PostgresCVRepository) GetProjectTechnologies(projectId uuid.UUID) ([]string, error) {
+func (r *PostgresCVRepository) GetProjectTechnologies(ctx context.Context, projectId uuid.UUID) ([]string, error) {
 	query := `
 		SELECT technology
 		FROM project_technologies
@@ -1021,7 +1026,7 @@ func (r *PostgresCVRepository) GetProjectTechnologies(projectId uuid.UUID) ([]st
 	`
 
 	var technologies []string
-	err := r.db.Select(&technologies, query, projectId)
+	err := r.db.SelectContext(ctx, &technologies, query, projectId)
 	if err != nil {
 		log.Error().Err(err).Str("project_id", projectId.String()).Msg("failed to get project technologies")
 		return nil, err
@@ -1030,13 +1035,13 @@ func (r *PostgresCVRepository) GetProjectTechnologies(projectId uuid.UUID) ([]st
 	return technologies, nil
 }
 
-func (r *PostgresCVRepository) DeleteProjectTechnology(projectId uuid.UUID, technology string) error {
+func (r *PostgresCVRepository) DeleteProjectTechnology(ctx context.Context, projectId uuid.UUID, technology string) error {
 	query := `
 		DELETE FROM project_technologies
 		WHERE project_id = $1 AND technology = $2
 	`
 
-	result, err := r.db.Exec(query, projectId, technology)
+	result, err := r.db.ExecContext(ctx, query, projectId, technology)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete project technology")
 		return err
@@ -1055,7 +1060,7 @@ func (r *PostgresCVRepository) DeleteProjectTechnology(projectId uuid.UUID, tech
 	return nil
 }
 
-func (r *PostgresCVRepository) AddCertification(resumeId uuid.UUID, certification *domain.Certification) (uuid.UUID, error) {
+func (r *PostgresCVRepository) AddCertification(ctx context.Context, resumeId uuid.UUID, certification *domain.Certification) (uuid.UUID, error) {
 	query := `
 		INSERT INTO certifications (
 			id, resume_id, name, issuer, issue_date, 
@@ -1097,7 +1102,8 @@ func (r *PostgresCVRepository) AddCertification(resumeId uuid.UUID, certificatio
 	}
 
 	var returnedID uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeId,
@@ -1118,7 +1124,7 @@ func (r *PostgresCVRepository) AddCertification(resumeId uuid.UUID, certificatio
 	return returnedID, nil
 }
 
-func (r *PostgresCVRepository) UpdateCertification(id uuid.UUID, certification *domain.Certification) error {
+func (r *PostgresCVRepository) UpdateCertification(ctx context.Context, id uuid.UUID, certification *domain.Certification) error {
 	query := `
 		UPDATE certifications
 		SET name = $1,
@@ -1161,7 +1167,8 @@ func (r *PostgresCVRepository) UpdateCertification(id uuid.UUID, certification *
 		expiryDate = &parsedExpiryDate
 	}
 
-	result, err := r.db.Exec(
+	result, err := r.db.ExecContext(
+		ctx,
 		query,
 		certification.Name,
 		certification.Issuer,
@@ -1190,13 +1197,13 @@ func (r *PostgresCVRepository) UpdateCertification(id uuid.UUID, certification *
 	return nil
 }
 
-func (r *PostgresCVRepository) DeleteCertification(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteCertification(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM certifications
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete certification")
 		return err
@@ -1215,7 +1222,7 @@ func (r *PostgresCVRepository) DeleteCertification(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) GetCertification(id uuid.UUID) (*domain.Certification, error) {
+func (r *PostgresCVRepository) GetCertification(ctx context.Context, id uuid.UUID) (*domain.Certification, error) {
 	query := `
 		SELECT name, issuer, issue_date, expiry_date, credential_id, url
 		FROM certifications
@@ -1231,7 +1238,7 @@ func (r *PostgresCVRepository) GetCertification(id uuid.UUID) (*domain.Certifica
 		URL          string     `db:"url"`
 	}
 
-	err := r.db.Get(&certRow, query, id)
+	err := r.db.GetContext(ctx, &certRow, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -1261,7 +1268,7 @@ func (r *PostgresCVRepository) GetCertification(id uuid.UUID) (*domain.Certifica
 	return certification, nil
 }
 
-func (r *PostgresCVRepository) GetCertificationsByResume(resumeId uuid.UUID) ([]*domain.Certification, error) {
+func (r *PostgresCVRepository) GetCertificationsByResume(ctx context.Context, resumeId uuid.UUID) ([]*domain.Certification, error) {
 	query := `
 		SELECT id, name, issuer, issue_date, expiry_date, credential_id, url
 		FROM certifications
@@ -1280,7 +1287,7 @@ func (r *PostgresCVRepository) GetCertificationsByResume(resumeId uuid.UUID) ([]
 	}
 
 	var rows []certRow
-	err := r.db.Select(&rows, query, resumeId)
+	err := r.db.SelectContext(ctx, &rows, query, resumeId)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("Failed to get certifications by resume")
 		return nil, err
@@ -1311,7 +1318,7 @@ func (r *PostgresCVRepository) GetCertificationsByResume(resumeId uuid.UUID) ([]
 }
 
 // Experience
-func (r *PostgresCVRepository) AddExperience(resumeId uuid.UUID, experience *domain.Experience) (uuid.UUID, error) {
+func (r *PostgresCVRepository) AddExperience(ctx context.Context, resumeId uuid.UUID, experience *domain.Experience) (uuid.UUID, error) {
 	query := `
 		INSERT INTO experience (
 			id, resume_id, employer, job_title, location, 
@@ -1350,7 +1357,8 @@ func (r *PostgresCVRepository) AddExperience(resumeId uuid.UUID, experience *dom
 	}
 
 	var returnedId uuid.UUID
-	err := r.db.QueryRow(
+	err := r.db.QueryRowContext(
+		ctx,
 		query,
 		id,
 		resumeId,
@@ -1373,7 +1381,7 @@ func (r *PostgresCVRepository) AddExperience(resumeId uuid.UUID, experience *dom
 	return returnedId, nil
 }
 
-func (r *PostgresCVRepository) UpdateExperience(id uuid.UUID, experience *domain.Experience) error {
+func (r *PostgresCVRepository) UpdateExperience(ctx context.Context, id uuid.UUID, experience *domain.Experience) error {
 	query := `
 		UPDATE experience
 		SET employer = $1,
@@ -1414,7 +1422,8 @@ func (r *PostgresCVRepository) UpdateExperience(id uuid.UUID, experience *domain
 		endDate = &parsedEndDate
 	}
 
-	result, err := r.db.Exec(
+	result, err := r.db.ExecContext(
+		ctx,
 		query,
 		experience.Employer,
 		experience.JobTitle,
@@ -1443,13 +1452,13 @@ func (r *PostgresCVRepository) UpdateExperience(id uuid.UUID, experience *domain
 	return nil
 }
 
-func (r *PostgresCVRepository) DeleteExperience(id uuid.UUID) error {
+func (r *PostgresCVRepository) DeleteExperience(ctx context.Context, id uuid.UUID) error {
 	query := `
 		DELETE FROM experience
 		WHERE id = $1
 	`
 
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete experience")
 		return err
@@ -1468,7 +1477,7 @@ func (r *PostgresCVRepository) DeleteExperience(id uuid.UUID) error {
 	return nil
 }
 
-func (r *PostgresCVRepository) GetExperience(id uuid.UUID) (*domain.Experience, error) {
+func (r *PostgresCVRepository) GetExperience(ctx context.Context, id uuid.UUID) (*domain.Experience, error) {
 	query := `
 		SELECT employer, job_title, location, 
 		       start_date, end_date, description
@@ -1485,7 +1494,7 @@ func (r *PostgresCVRepository) GetExperience(id uuid.UUID) (*domain.Experience, 
 		Description string     `db:"description"`
 	}
 
-	err := r.db.Get(&exp, query, id)
+	err := r.db.GetContext(ctx, &exp, query, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -1515,7 +1524,7 @@ func (r *PostgresCVRepository) GetExperience(id uuid.UUID) (*domain.Experience, 
 	return experience, err
 }
 
-func (r *PostgresCVRepository) GetExperienceByResume(resumeId uuid.UUID) ([]*domain.Experience, error) {
+func (r *PostgresCVRepository) GetExperienceByResume(ctx context.Context, resumeId uuid.UUID) ([]*domain.Experience, error) {
 	query := `
 		SELECT id, employer, job_title, location, 
 		       start_date, end_date, description
@@ -1535,7 +1544,7 @@ func (r *PostgresCVRepository) GetExperienceByResume(resumeId uuid.UUID) ([]*dom
 	}
 
 	var rows []experienceRow
-	err := r.db.Select(&rows, query, resumeId)
+	err := r.db.SelectContext(ctx, &rows, query, resumeId)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("Failed to get experience by resume")
 		return nil, err
@@ -1568,13 +1577,13 @@ func (r *PostgresCVRepository) GetExperienceByResume(resumeId uuid.UUID) ([]*dom
 }
 
 // Get Complete Resume
-func (r *PostgresCVRepository) GetCompleteResume(resumeId uuid.UUID) (*domain.Resume, error) {
-	resume, err := r.GetCVById(resumeId)
+func (r *PostgresCVRepository) GetCompleteResume(ctx context.Context, resumeId uuid.UUID) (*domain.Resume, error) {
+	resume, err := r.GetCVById(ctx, resumeId)
 	if err != nil {
 		return nil, err
 	}
 
-	personalInfo, err := r.GetPersonalInfo(resumeId)
+	personalInfo, err := r.GetPersonalInfo(ctx, resumeId)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, err
 	}
@@ -1583,7 +1592,7 @@ func (r *PostgresCVRepository) GetCompleteResume(resumeId uuid.UUID) (*domain.Re
 		resume.PersonalInfo = personalInfo
 	}
 
-	education, err := r.GetEducationByResume(resumeId)
+	education, err := r.GetEducationByResume(ctx, resumeId)
 	if err != nil {
 		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get education")
 	} else {

@@ -23,7 +23,7 @@ func NewAuthHandler(authService *service.AuthService, redisClient *redis.Client)
 	rateLimiterConfig := security.RateLimiterConfig{
 		Redis:    redisClient,
 		Limit:    100,
-		Internal: time.Minute,
+		Interval: time.Minute,
 	}
 	return &AuthHandler{
 		authService: authService,
@@ -57,6 +57,7 @@ type PasswordResetRequest struct {
 }
 
 func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	// Apply rate limiting
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
@@ -82,7 +83,7 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Register user
-	user, err := h.authService.Register(req.Email, req.Password, req.Role)
+	user, err := h.authService.Register(ctx, req.Email, req.Password, req.Role)
 	if err != nil {
 		if errors.Is(err, errors.New("user already exists")) {
 			RespondWithError(w, http.StatusConflict, "User with this email already exists", "USER_EXISTS")
@@ -101,6 +102,8 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
 	// Apply rate limiting
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
@@ -126,7 +129,7 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
 
 	// Login user
-	tokens, err := h.authService.Login(req.Email, req.Password, userAgent, clientIP)
+	tokens, err := h.authService.Login(ctx, req.Email, req.Password, userAgent, clientIP)
 	if err != nil {
 		if errors.Is(err, errors.New("invalid credentials!!")) {
 			// Return same error for invalid email or password to prevent user enumeration
@@ -143,6 +146,8 @@ func (h *AuthHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
@@ -160,7 +165,7 @@ func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.authService.Logout(req.RefreshToken); err != nil {
+	if err := h.authService.Logout(ctx, req.RefreshToken); err != nil {
 		log.Error().Err(err).Msg("failed to logout user")
 		RespondWithError(w, http.StatusInternalServerError, "failed to logout user", "LOGOUT_FAILED")
 		return
@@ -171,6 +176,8 @@ func (h *AuthHandler) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
@@ -190,7 +197,7 @@ func (h *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request
 	userAgent := r.UserAgent()
 	clientIP := getClientIP(r)
 
-	tokens, err := h.authService.RefreshToken(req.RefreshToken, userAgent, clientIP)
+	tokens, err := h.authService.RefreshToken(ctx, req.RefreshToken, userAgent, clientIP)
 	if err != nil {
 		status := http.StatusUnauthorized
 		code := "INVALID_TOKEN"
@@ -211,6 +218,8 @@ func (h *AuthHandler) RefreshTokenHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (h *AuthHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
@@ -227,7 +236,7 @@ func (h *AuthHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	resetToken, err := h.authService.RequestPasswordReset(req.Email)
+	resetToken, err := h.authService.RequestPasswordReset(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, errors.New("user not found")) {
 			RespondWithJSON(w, http.StatusOK, map[string]any{
@@ -246,6 +255,7 @@ func (h *AuthHandler) RequestPasswordResetHandler(w http.ResponseWriter, r *http
 }
 
 func (h *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
@@ -262,7 +272,7 @@ func (h *AuthHandler) ResetPasswordHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.authService.ResetPassword(req.Token, req.NewPassword); err != nil {
+	if err := h.authService.ResetPassword(ctx, req.Token, req.NewPassword); err != nil {
 		status := http.StatusBadRequest
 		code := "PASSWORD_RESET_FAILED"
 		message := "Failed to reset password"

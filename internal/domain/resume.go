@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"time"
 )
@@ -20,46 +21,46 @@ type Resume struct {
 }
 
 type ResumeRepository interface {
-	CreateCV(userId uuid.UUID) (*Resume, error)
-	GetCVById(id uuid.UUID) (*Resume, error)
-	GetCVByUserId(userId uuid.UUID) ([]*Resume, error)
-	DeleteCV(id uuid.UUID) error
+	CreateCV(ctx context.Context, userId uuid.UUID) (*Resume, error)
+	GetCVById(ctx context.Context, id uuid.UUID) (*Resume, error)
+	GetCVByUserId(ctx context.Context, userId uuid.UUID) ([]*Resume, error)
+	DeleteCV(ctx context.Context, id uuid.UUID) error
 
-	SavePersonalInfo(resumeID uuid.UUID, info *PersonalInfo) error
-	GetPersonalInfo(resumeID uuid.UUID) (*PersonalInfo, error)
+	SavePersonalInfo(ctx context.Context, resumeID uuid.UUID, info *PersonalInfo) error
+	GetPersonalInfo(ctx context.Context, resumeID uuid.UUID) (*PersonalInfo, error)
 
-	AddEducation(resumeID uuid.UUID, education *Education) (uuid.UUID, error)
-	UpdateEducation(id uuid.UUID, education *Education) error
-	DeleteEducation(id uuid.UUID) error
-	GetEducation(id uuid.UUID) (*Education, error)
-	GetEducationByResume(resumeID uuid.UUID) ([]*Education, error)
+	AddEducation(ctx context.Context, resumeID uuid.UUID, education *Education) (uuid.UUID, error)
+	UpdateEducation(ctx context.Context, id uuid.UUID, education *Education) error
+	DeleteEducation(ctx context.Context, id uuid.UUID) error
+	GetEducation(ctx context.Context, id uuid.UUID) (*Education, error)
+	GetEducationByResume(ctx context.Context, resumeID uuid.UUID) ([]*Education, error)
 
-	AddExperience(resumeId uuid.UUID, experience *Experience) (uuid.UUID, error)
-	UpdateExperience(id uuid.UUID, experience *Experience) error
-	DeleteExperience(id uuid.UUID) error
-	GetExperience(id uuid.UUID) (*Experience, error)
-	GetExperienceByResume(resumeID uuid.UUID) ([]*Experience, error)
+	AddExperience(ctx context.Context, resumeId uuid.UUID, experience *Experience) (uuid.UUID, error)
+	UpdateExperience(ctx context.Context, id uuid.UUID, experience *Experience) error
+	DeleteExperience(ctx context.Context, id uuid.UUID) error
+	GetExperience(ctx context.Context, id uuid.UUID) (*Experience, error)
+	GetExperienceByResume(ctx context.Context, resumeID uuid.UUID) ([]*Experience, error)
 
-	AddSkill(resumeID uuid.UUID, skill *Skill) (uuid.UUID, error)
-	UpdateSkill(id uuid.UUID, skill *Skill) error
-	DeleteSkill(id uuid.UUID) error
-	GetSkill(id uuid.UUID) (*Skill, error)
-	GetSkillsByCV(resumeID uuid.UUID) ([]*Skill, error)
+	AddSkill(ctx context.Context, resumeID uuid.UUID, skill *Skill) (uuid.UUID, error)
+	UpdateSkill(ctx context.Context, id uuid.UUID, skill *Skill) error
+	DeleteSkill(ctx context.Context, id uuid.UUID) error
+	GetSkill(ctx context.Context, id uuid.UUID) (*Skill, error)
+	GetSkillsByCV(ctx context.Context, resumeID uuid.UUID) ([]*Skill, error)
 
 	// Project operations
-	AddProject(resumeID uuid.UUID, project *Project) (uuid.UUID, error)
-	UpdateProject(id uuid.UUID, project *Project) error
-	DeleteProject(id uuid.UUID) error
-	GetProject(id uuid.UUID) (*Project, error)
-	GetProjectByCV(resumeId uuid.UUID) ([]*Project, error)
+	AddProject(ctx context.Context, resumeID uuid.UUID, project *Project) (uuid.UUID, error)
+	UpdateProject(ctx context.Context, id uuid.UUID, project *Project) error
+	DeleteProject(ctx context.Context, id uuid.UUID) error
+	GetProject(ctx context.Context, id uuid.UUID) (*Project, error)
+	GetProjectByCV(ctx context.Context, resumeId uuid.UUID) ([]*Project, error)
 
 	// Certification operations
-	AddCertification(resumeID uuid.UUID, certification *Certification) (uuid.UUID, error)
-	UpdateCertification(id uuid.UUID, certification *Certification) error
-	DeleteCertification(id uuid.UUID) error
-	GetCertification(id uuid.UUID) (*Certification, error)
-	GetCertificationsByResume(resumeID uuid.UUID) ([]*Certification, error)
+	AddCertification(ctx context.Context, resumeID uuid.UUID, certification *Certification) (uuid.UUID, error)
+	UpdateCertification(ctx context.Context, id uuid.UUID, certification *Certification) error
+	DeleteCertification(ctx context.Context, id uuid.UUID) error
+	GetCertification(ctx context.Context, id uuid.UUID) (*Certification, error)
+	GetCertificationsByResume(ctx context.Context, resumeID uuid.UUID) ([]*Certification, error)
 
 	// Complete resume operations
-	GetCompleteResume(resumeID uuid.UUID) (*Resume, error)
+	GetCompleteResume(ctx context.Context, resumeID uuid.UUID) (*Resume, error)
 }

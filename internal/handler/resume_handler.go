@@ -20,6 +20,7 @@ func NewResumeHandler(resumeRepo domain.ResumeRepository) *ResumeHandler {
 }
 
 func (h *ResumeHandler) GetResumeHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -43,7 +44,7 @@ func (h *ResumeHandler) GetResumeHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCompleteResume(resumeUUID)
+	resume, err := h.resumeRepo.GetCompleteResume(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -62,6 +63,7 @@ func (h *ResumeHandler) GetResumeHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ResumeHandler) CreateResumeHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -74,7 +76,7 @@ func (h *ResumeHandler) CreateResumeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resume, err := h.resumeRepo.CreateCV(userId)
+	resume, err := h.resumeRepo.CreateCV(ctx, userId)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to create resume", "INTERNAL_SERVER_ERROR")
 		return
@@ -83,6 +85,7 @@ func (h *ResumeHandler) CreateResumeHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ResumeHandler) DeleteResumeHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 
 	if err != nil {
@@ -108,7 +111,7 @@ func (h *ResumeHandler) DeleteResumeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -123,7 +126,7 @@ func (h *ResumeHandler) DeleteResumeHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.resumeRepo.DeleteCV(resumeUUID); err != nil {
+	if err := h.resumeRepo.DeleteCV(ctx, resumeUUID); err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to delete resume", "INTERNAL_SERVER_ERROR")
 		return
 	}
@@ -135,6 +138,7 @@ func (h *ResumeHandler) DeleteResumeHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ResumeHandler) GetResumeListHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -149,7 +153,7 @@ func (h *ResumeHandler) GetResumeListHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get resumes from repository
-	resumes, err := h.resumeRepo.GetCVByUserId(userId)
+	resumes, err := h.resumeRepo.GetCVByUserId(ctx, userId)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get resumes", "INTERNAL_SERVER_ERROR")
 		return
@@ -159,6 +163,7 @@ func (h *ResumeHandler) GetResumeListHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ResumeHandler) SavePersonalInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -183,7 +188,7 @@ func (h *ResumeHandler) SavePersonalInfoHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -211,7 +216,7 @@ func (h *ResumeHandler) SavePersonalInfoHandler(w http.ResponseWriter, r *http.R
 
 	personalInfo.BeforeSave()
 
-	if err := h.resumeRepo.SavePersonalInfo(resumeUUID, &personalInfo); err != nil {
+	if err := h.resumeRepo.SavePersonalInfo(ctx, resumeUUID, &personalInfo); err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to save personal info", "INTERNAL_SERVER_ERROR")
 		return
 	}
@@ -223,6 +228,7 @@ func (h *ResumeHandler) SavePersonalInfoHandler(w http.ResponseWriter, r *http.R
 }
 
 func (h *ResumeHandler) AddEducationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -247,7 +253,7 @@ func (h *ResumeHandler) AddEducationHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -275,7 +281,7 @@ func (h *ResumeHandler) AddEducationHandler(w http.ResponseWriter, r *http.Reque
 
 	education.BeforeSave()
 
-	educationID, err := h.resumeRepo.AddEducation(resumeUUID, &education)
+	educationID, err := h.resumeRepo.AddEducation(ctx, resumeUUID, &education)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add education", "INTERNAL_SERVER_ERROR")
 		return
@@ -288,6 +294,7 @@ func (h *ResumeHandler) AddEducationHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ResumeHandler) GetEducationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -312,7 +319,7 @@ func (h *ResumeHandler) GetEducationHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -327,7 +334,7 @@ func (h *ResumeHandler) GetEducationHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	education, err := h.resumeRepo.GetEducationByResume(resumeUUID)
+	education, err := h.resumeRepo.GetEducationByResume(ctx, resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get education entries", "INTERNAL_SERVER_ERROR")
 		return
@@ -337,6 +344,7 @@ func (h *ResumeHandler) GetEducationHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ResumeHandler) DeleteEducationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -374,7 +382,7 @@ func (h *ResumeHandler) DeleteEducationHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -389,7 +397,7 @@ func (h *ResumeHandler) DeleteEducationHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := h.resumeRepo.DeleteEducation(educationUUID); err != nil {
+	if err := h.resumeRepo.DeleteEducation(ctx, educationUUID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Education entry not found", "NOT_FOUND")
 			return
@@ -404,6 +412,7 @@ func (h *ResumeHandler) DeleteEducationHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ResumeHandler) AddExperienceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -428,7 +437,7 @@ func (h *ResumeHandler) AddExperienceHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -456,7 +465,7 @@ func (h *ResumeHandler) AddExperienceHandler(w http.ResponseWriter, r *http.Requ
 
 	experience.BeforeSave()
 
-	experienceID, err := h.resumeRepo.AddExperience(resumeUUID, &experience)
+	experienceID, err := h.resumeRepo.AddExperience(ctx, resumeUUID, &experience)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add experience", "INTERNAL_SERVER_ERROR")
 		return
@@ -469,6 +478,7 @@ func (h *ResumeHandler) AddExperienceHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ResumeHandler) GetExperienceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -493,7 +503,7 @@ func (h *ResumeHandler) GetExperienceHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -508,7 +518,7 @@ func (h *ResumeHandler) GetExperienceHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	experience, err := h.resumeRepo.GetExperienceByResume(resumeUUID)
+	experience, err := h.resumeRepo.GetExperienceByResume(ctx, resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get experience entries", "INTERNAL_SERVER_ERROR")
 		return
@@ -518,6 +528,7 @@ func (h *ResumeHandler) GetExperienceHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ResumeHandler) DeleteExperienceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -555,7 +566,7 @@ func (h *ResumeHandler) DeleteExperienceHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -570,7 +581,7 @@ func (h *ResumeHandler) DeleteExperienceHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.resumeRepo.DeleteExperience(experienceUUID); err != nil {
+	if err := h.resumeRepo.DeleteExperience(ctx, experienceUUID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Experience entry not found", "NOT_FOUND")
 			return
@@ -585,6 +596,7 @@ func (h *ResumeHandler) DeleteExperienceHandler(w http.ResponseWriter, r *http.R
 }
 
 func (h *ResumeHandler) AddSkillHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -609,7 +621,7 @@ func (h *ResumeHandler) AddSkillHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -637,7 +649,7 @@ func (h *ResumeHandler) AddSkillHandler(w http.ResponseWriter, r *http.Request) 
 
 	skill.BeforeSave()
 
-	skillID, err := h.resumeRepo.AddSkill(resumeUUID, &skill)
+	skillID, err := h.resumeRepo.AddSkill(ctx, resumeUUID, &skill)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add skill", "INTERNAL_SERVER_ERROR")
 		return
@@ -650,6 +662,7 @@ func (h *ResumeHandler) AddSkillHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ResumeHandler) GetSkillsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -674,7 +687,7 @@ func (h *ResumeHandler) GetSkillsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -689,7 +702,7 @@ func (h *ResumeHandler) GetSkillsHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	skills, err := h.resumeRepo.GetSkillsByCV(resumeUUID)
+	skills, err := h.resumeRepo.GetSkillsByCV(ctx, resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get skills", "INTERNAL_SERVER_ERROR")
 		return
@@ -699,6 +712,7 @@ func (h *ResumeHandler) GetSkillsHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ResumeHandler) DeleteSkillHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -738,7 +752,7 @@ func (h *ResumeHandler) DeleteSkillHandler(w http.ResponseWriter, r *http.Reques
 
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -753,7 +767,7 @@ func (h *ResumeHandler) DeleteSkillHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := h.resumeRepo.DeleteSkill(skillUUID); err != nil {
+	if err := h.resumeRepo.DeleteSkill(ctx, skillUUID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Skill not found", "NOT_FOUND")
 			return
@@ -768,6 +782,7 @@ func (h *ResumeHandler) DeleteSkillHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ResumeHandler) AddProjectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -792,7 +807,7 @@ func (h *ResumeHandler) AddProjectHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -820,7 +835,7 @@ func (h *ResumeHandler) AddProjectHandler(w http.ResponseWriter, r *http.Request
 
 	project.BeforeSave()
 
-	projectID, err := h.resumeRepo.AddProject(resumeUUID, &project)
+	projectID, err := h.resumeRepo.AddProject(ctx, resumeUUID, &project)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add project", "INTERNAL_SERVER_ERROR")
 		return
@@ -833,6 +848,7 @@ func (h *ResumeHandler) AddProjectHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (h *ResumeHandler) GetProjectsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -857,7 +873,7 @@ func (h *ResumeHandler) GetProjectsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -872,7 +888,7 @@ func (h *ResumeHandler) GetProjectsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	projects, err := h.resumeRepo.GetProjectByCV(resumeUUID)
+	projects, err := h.resumeRepo.GetProjectByCV(ctx, resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get projects", "INTERNAL_SERVER_ERROR")
 		return
@@ -882,6 +898,7 @@ func (h *ResumeHandler) GetProjectsHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ResumeHandler) DeleteProjectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -918,7 +935,7 @@ func (h *ResumeHandler) DeleteProjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -933,7 +950,7 @@ func (h *ResumeHandler) DeleteProjectHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := h.resumeRepo.DeleteProject(projectUUID); err != nil {
+	if err := h.resumeRepo.DeleteProject(ctx, projectUUID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Project not found", "NOT_FOUND")
 			return
@@ -948,6 +965,7 @@ func (h *ResumeHandler) DeleteProjectHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *ResumeHandler) AddCertificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -972,7 +990,7 @@ func (h *ResumeHandler) AddCertificationHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -1000,7 +1018,7 @@ func (h *ResumeHandler) AddCertificationHandler(w http.ResponseWriter, r *http.R
 
 	certification.BeforeSave()
 
-	certificationID, err := h.resumeRepo.AddCertification(resumeUUID, &certification)
+	certificationID, err := h.resumeRepo.AddCertification(ctx, resumeUUID, &certification)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to add certification", "INTERNAL_SERVER_ERROR")
 		return
@@ -1013,6 +1031,7 @@ func (h *ResumeHandler) AddCertificationHandler(w http.ResponseWriter, r *http.R
 }
 
 func (h *ResumeHandler) GetCertificationsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -1037,7 +1056,7 @@ func (h *ResumeHandler) GetCertificationsHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -1052,7 +1071,7 @@ func (h *ResumeHandler) GetCertificationsHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	certifications, err := h.resumeRepo.GetCertificationsByResume(resumeUUID)
+	certifications, err := h.resumeRepo.GetCertificationsByResume(ctx, resumeUUID)
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Failed to get certifications", "INTERNAL_SERVER_ERROR")
 		return
@@ -1062,6 +1081,7 @@ func (h *ResumeHandler) GetCertificationsHandler(w http.ResponseWriter, r *http.
 }
 
 func (h *ResumeHandler) DeleteCertificationHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -1099,7 +1119,7 @@ func (h *ResumeHandler) DeleteCertificationHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -1114,7 +1134,7 @@ func (h *ResumeHandler) DeleteCertificationHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := h.resumeRepo.DeleteCertification(certificationUUID); err != nil {
+	if err := h.resumeRepo.DeleteCertification(ctx, certificationUUID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Certification not found", "NOT_FOUND")
 			return
@@ -1129,6 +1149,7 @@ func (h *ResumeHandler) DeleteCertificationHandler(w http.ResponseWriter, r *htt
 }
 
 func (h *ResumeHandler) GetPersonalInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	claims, err := GetClaimsFromContext(r.Context())
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Unauthorized", "UNAUTHORIZED")
@@ -1153,7 +1174,7 @@ func (h *ResumeHandler) GetPersonalInfoHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	resume, err := h.resumeRepo.GetCVById(resumeUUID)
+	resume, err := h.resumeRepo.GetCVById(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithError(w, http.StatusNotFound, "Resume not found", "NOT_FOUND")
@@ -1168,7 +1189,7 @@ func (h *ResumeHandler) GetPersonalInfoHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	personalInfo, err := h.resumeRepo.GetPersonalInfo(resumeUUID)
+	personalInfo, err := h.resumeRepo.GetPersonalInfo(ctx, resumeUUID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			RespondWithJSON(w, http.StatusOK, nil)

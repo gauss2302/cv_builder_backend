@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"time"
 )
@@ -34,20 +35,20 @@ type PasswordReset struct {
 }
 
 type UserRepository interface {
-	CreateUser(user *User) error
-	GetUserById(id uuid.UUID) (*User, error)
-	GetUserByEmail(email string) (*User, error)
-	UpdateUser(user *User) error
-	DeleteUser(id uuid.UUID) error
+	CreateUser(ctx context.Context, user *User) error
+	GetUserById(ctx context.Context, id uuid.UUID) (*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	UpdateUser(ctx context.Context, user *User) error
+	DeleteUser(ctx context.Context, id uuid.UUID) error
 
-	CreateSession(session *Session) error
-	GetSessionById(id uuid.UUID) (*Session, error)
-	GetSessionByToken(token string) (*Session, error)
-	DeleteSession(id uuid.UUID) error
-	DeleteUserSessions(userId uuid.UUID) error
+	CreateSession(ctx context.Context, session *Session) error
+	GetSessionById(ctx context.Context, id uuid.UUID) (*Session, error)
+	GetSessionByToken(ctx context.Context, token string) (*Session, error)
+	DeleteSession(ctx context.Context, id uuid.UUID) error
+	DeleteUserSessions(ctx context.Context, userId uuid.UUID) error
 
-	CreatePasswordReset(reset *PasswordReset) error
-	GetPasswordResetByToken(token string) (*PasswordReset, error)
-	MarkPasswordResetUsed(id uuid.UUID) error
-	DeleteExpiredPasswordReset() error
+	CreatePasswordReset(ctx context.Context, reset *PasswordReset) error
+	GetPasswordResetByToken(ctx context.Context, token string) (*PasswordReset, error)
+	MarkPasswordResetUsed(ctx context.Context, id uuid.UUID) error
+	DeleteExpiredPasswordReset(ctx context.Context) error
 }
