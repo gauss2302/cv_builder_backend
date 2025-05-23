@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"github.com/google/uuid"
+	tgInitData "github.com/telegram-mini-apps/init-data-golang"
 	"time"
 )
 
@@ -13,6 +14,46 @@ type User struct {
 	Role         string    `json:"role" db:"role"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type TelegramUser struct {
+	ID         uuid.UUID       `json:"id" db:"id"`
+	User       tgInitData.User `json:"user" db:"user"`
+	TelegramID int64           `json:"telegram_id" db:"telegram_id"`
+	FirstName  string          `json:"first_name" db:"first_name"`
+	LastName   string          `json:"last_name" db:"last_name"`
+	Username   string          `json:"username" db:"username"`
+	Role       string          `json:"role" db:"role"`
+	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
+}
+
+type TgUser struct {
+	User tgInitData.User `json:"user"`
+}
+
+func (tg *TgUser) GetUserId() int64 {
+	return tg.User.ID
+}
+
+type AuthResponse struct {
+	Message      string          `json:"message"`
+	QueryID      string          `json:"query_id,omitempty"`
+	AuthDate     time.Time       `json:"auth_date,omitempty"`
+	User         tgInitData.User `json:"user,omitempty"`
+	Receiver     tgInitData.User `json:"receiver,omitempty"`
+	Chat         tgInitData.Chat `json:"chat,omitempty"`
+	StartParam   string          `json:"start_param,omitempty"`
+	CanSendAfter *time.Time      `json:"can_send_after,omitempty"`
+	ChatType     string          `json:"chat_type,omitempty"`
+	ChatInstance string          `json:"chat_instance,omitempty"`
+}
+
+type TelegramAuthData struct {
+	InitData      string
+	ParsedData    *tgInitData.InitData
+	IsValid       bool
+	ValidationErr error
 }
 
 type Session struct {
@@ -40,6 +81,8 @@ type UserRepository interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdateUser(ctx context.Context, user *User) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
+	GetUserByTelegramID(ctx context.Context, telegramID int64) (*TelegramUser, error)
+	CreateTelegramUser(ctx context.Context, userTg *TelegramUser) error
 
 	CreateSession(ctx context.Context, session *Session) error
 	GetSessionById(ctx context.Context, id uuid.UUID) (*Session, error)

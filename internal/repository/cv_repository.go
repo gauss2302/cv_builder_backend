@@ -1583,21 +1583,20 @@ func (r *PostgresCVRepository) GetCompleteResume(ctx context.Context, resumeId u
 		return nil, err
 	}
 
-	personalInfo, err := r.GetPersonalInfo(ctx, resumeId)
-	if err != nil && !errors.Is(err, ErrNotFound) {
-		return nil, err
-	}
+	// Load all related data
+	personalInfo, _ := r.GetPersonalInfo(ctx, resumeId)
+	education, _ := r.GetEducationByResume(ctx, resumeId)
+	experience, _ := r.GetExperienceByResume(ctx, resumeId)
+	skills, _ := r.GetSkillsByCV(ctx, resumeId)
+	projects, _ := r.GetProjectByCV(ctx, resumeId)
+	certifications, _ := r.GetCertificationsByResume(ctx, resumeId)
 
-	if personalInfo != nil {
-		resume.PersonalInfo = personalInfo
-	}
+	resume.PersonalInfo = personalInfo
+	resume.Education = education
+	resume.Experience = experience
+	resume.Skills = skills
+	resume.Projects = projects
+	resume.Certifications = certifications
 
-	education, err := r.GetEducationByResume(ctx, resumeId)
-	if err != nil {
-		log.Error().Err(err).Str("resume_id", resumeId.String()).Msg("failed to get education")
-	} else {
-		resume.Education = education
-	}
-
-	return nil, nil
+	return resume, nil
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"cv_builder/config"
 	"cv_builder/internal/service"
 	"cv_builder/pkg/security"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
+	tgInitData "github.com/telegram-mini-apps/init-data-golang"
 	"net/http"
 	"time"
 )
@@ -41,6 +43,10 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required"`
+}
+
+type TelegramRequest struct {
+	InitData string `json:"initData"`
 }
 
 type RefreshTokenRequest struct {
@@ -313,4 +319,51 @@ func (h *AuthHandler) applyRateLimit(w http.ResponseWriter, r *http.Request) boo
 	w.Header().Set("X-RateLimit-Reset", "60")
 
 	return true
+}
+
+func (h *AuthHandler) LoginTelegram(w http.ResponseWriter, r *http.Request) {
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if ok := h.applyRateLimit(w, r); !ok {
+		return
+	}
+
+	var req TelegramRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid request body", "INVALID_REQUEST")
+		return
+	}
+
+	if req.InitData == "" {
+		http.Error(w, "initData parameter is missing", http.StatusBadRequest)
+		return
+	}
+
+	const MY_BOT_TOKEN = "7754477817:AAGYrJrfTfmaG-rE4Tv7gctnFU9qF4CXFYc"
+	const INIT_DATA_EXPIRATION = 3 * time.Hour
+
+	cfg, _ := config.Load()
+
+	botToken := cfg.TelegramBotToken
+
+	err := tgInitData.Validate(req.InitData, botToken, INIT_DATA_EXPIRATION)
+	if err != nil {
+		log.Printf("Validation error: %v\n", err)
+		RespondWithError(w, http.StatusUnauthorized, "Failed to validate", "TG_VALIDATION_FAILED")
+		return
+	}
+
+	parsedData, err := tgInitData.Parse(req.InitData)
+	if err != nil {
+		log.Printf("Parsing error: %v\n", err)
+		RespondWithError(w, http.StatusInternalServerError, "Failed to parse data", "TG_PARSE_ERROR")
+		return
+	}
+
+	fmt.Println(parsedData) // For development logging
+	RespondWithJSON(w, http.StatusOK, parsedData)
 }

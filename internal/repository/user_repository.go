@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"strconv"
 	"time"
 )
 
@@ -74,6 +75,41 @@ func (r *PostgresRepository) CreateUser(ctx context.Context, user *domain.User) 
 	return nil
 }
 
+func (r *PostgresRepository) CreateTelegramUser(ctx context.Context, userTg *domain.TelegramUser) error {
+	query := `
+		INSERT INTO users (id, telegram_id, first_name, role, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`
+	//default values
+	if userTg.ID == uuid.Nil {
+		userTg.ID = uuid.New()
+	}
+	if userTg.Role == "" {
+		userTg.Role = "user" // Default role
+	}
+	now := time.Now()
+	if userTg.CreatedAt.IsZero() {
+		userTg.CreatedAt = now
+	}
+	if userTg.UpdatedAt.IsZero() {
+		userTg.UpdatedAt = now
+	}
+
+	var id uuid.UUID
+
+	err := r.db.QueryRowContext(ctx, query, userTg.ID, userTg.User.FirstName, userTg.Role, userTg.CreatedAt, userTg.UpdatedAt).Scan(&id)
+	if err != nil {
+		if isDubpicateKeyError(err) {
+			log.Error().Err(err).Str("tg_id", strconv.FormatInt(userTg.User.ID, 10)).Msg("cannot create user with the same tg id")
+			return ErrConflict
+		}
+		log.Error().Err(err).Msg("failed to create a user")
+		return err
+	}
+	return nil
+}
+
 func (r *PostgresRepository) GetUserById(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, role, created_at, updated_at
@@ -90,6 +126,36 @@ func (r *PostgresRepository) GetUserById(ctx context.Context, id uuid.UUID) (*do
 		log.Error().Err(err).Str("user_id", id.String()).Msg("failed to get user by id")
 		return nil, err
 	}
+	return &user, nil
+}
+
+func (r *PostgresRepository) GetUserByTelegramID(ctx context.Context, telegramID int64) (*domain.TelegramUser, error) {
+	query := `
+		SELECT id, telegram_id, first_name, last_name, username, role, created_at, updated_at 
+		FROM users 
+		WHERE telegram_id = $1
+	`
+
+	var user domain.TelegramUser
+	err := r.db.QueryRowContext(ctx, query, telegramID).Scan(
+		&user.ID,
+		&user.TelegramID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Username,
+		&user.Role,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrInvalidField
+		}
+		log.Error().Err(err).Int64("telegram_id", telegramID).Msg("failed to get user by Telegram ID")
+		return nil, err
+	}
+
 	return &user, nil
 }
 

@@ -7,8 +7,10 @@ import (
 	"cv_builder/pkg/auth"
 	"cv_builder/pkg/security"
 	"errors"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	tgInitData "github.com/telegram-mini-apps/init-data-golang"
 	"time"
 )
 
@@ -81,6 +83,32 @@ func (s *AuthService) Register(ctx context.Context, email, password, role string
 
 	return user, nil
 
+}
+
+func (s *AuthService) RegisterWithTelegram(ctx context.Context, telegramId int64) (*domain.TelegramUser, error) {
+	existingUser, err := s.userRepo.GetUserByTelegramID(ctx, telegramId)
+	if err == nil && existingUser != nil {
+		return nil, ErrUserAlreadyExists
+	} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	user := &domain.TelegramUser{
+		ID: uuid.New(),
+		User: tgInitData.User{
+			ID: telegramId,
+		},
+	}
+
+	fmt.Println(user)
+	if err := s.userRepo.CreateTelegramUser(ctx, user); err != nil {
+		log.Error().Err(err).Msg("failed to create tg user")
+		if errors.Is(err, repository.ErrConflict) {
+			return nil, ErrUserAlreadyExists
+		}
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password, userAgent, clientIP string) (*TokenPair, error) {

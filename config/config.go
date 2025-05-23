@@ -9,11 +9,12 @@ import (
 )
 
 type Config struct {
-	Port      string
-	DBUrl     string
-	RedisUrl  string
-	JWTSecret string
-	CSRFKey   string
+	Port             string
+	DBUrl            string
+	RedisUrl         string
+	JWTSecret        string
+	CSRFKey          string
+	TelegramBotToken string
 }
 
 // Load loads configuration from environment variables with validation
@@ -23,11 +24,12 @@ func Load() (*Config, error) {
 	}
 
 	config := &Config{
-		Port:      os.Getenv("PORT"),
-		DBUrl:     os.Getenv("DB_URL"),
-		RedisUrl:  os.Getenv("REDIS_URL"),
-		JWTSecret: os.Getenv("JWT_SECRET"),
-		CSRFKey:   os.Getenv("CSRF_KEY"),
+		Port:             os.Getenv("PORT"),
+		DBUrl:            os.Getenv("DB_URL"),
+		RedisUrl:         os.Getenv("REDIS_URL"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		CSRFKey:          os.Getenv("CSRF_KEY"),
+		TelegramBotToken: os.Getenv("MY_BOT_TOKEN"),
 	}
 
 	// Validate configuration
