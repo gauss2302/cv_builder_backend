@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"github.com/google/uuid"
 	tgInitData "github.com/telegram-mini-apps/init-data-golang"
 	"time"
@@ -17,15 +18,19 @@ type User struct {
 }
 
 type TelegramUser struct {
-	ID         uuid.UUID       `json:"id" db:"id"`
-	User       tgInitData.User `json:"user" db:"user"`
-	TelegramID int64           `json:"telegram_id" db:"telegram_id"`
-	FirstName  string          `json:"first_name" db:"first_name"`
-	LastName   string          `json:"last_name" db:"last_name"`
-	Username   string          `json:"username" db:"username"`
-	Role       string          `json:"role" db:"role"`
-	CreatedAt  time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at" db:"updated_at"`
+	ID           uuid.UUID `json:"id" db:"id"`
+	Email        *string   `json:"email,omitempty" db:"email"`
+	PasswordHash *string   `json:"-" db:"password_hash"`
+	TelegramID   *int64    `json:"telegram_id,omitempty" db:"telegram_id"`
+	FirstName    *string   `json:"first_name,omitempty" db:"first_name"`
+	LastName     *string   `json:"last_name,omitempty" db:"last_name"`
+	Username     *string   `json:"username,omitempty" db:"username"`
+	PhotoURL     *string   `json:"photo_url,omitempty" db:"photo_url"`
+	LanguageCode *string   `json:"language_code,omitempty" db:"language_code"`
+	IsPremium    bool      `json:"is_premium" db:"is_premium"`
+	Role         string    `json:"role" db:"role"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
 type TgUser struct {
@@ -82,7 +87,8 @@ type UserRepository interface {
 	UpdateUser(ctx context.Context, user *User) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	GetUserByTelegramID(ctx context.Context, telegramID int64) (*TelegramUser, error)
-	CreateTelegramUser(ctx context.Context, userTg *TelegramUser) error
+	CreateTelegramUser(ctx context.Context, tgUser tgInitData.User) (*TelegramUser, error)
+	UpdateTelegramUser(ctx context.Context, user *TelegramUser) error
 
 	CreateSession(ctx context.Context, session *Session) error
 	GetSessionById(ctx context.Context, id uuid.UUID) (*Session, error)
@@ -94,4 +100,24 @@ type UserRepository interface {
 	GetPasswordResetByToken(ctx context.Context, token string) (*PasswordReset, error)
 	MarkPasswordResetUsed(ctx context.Context, id uuid.UUID) error
 	DeleteExpiredPasswordReset(ctx context.Context) error
+}
+
+func (u *TelegramUser) GetDisplayName() string {
+	if u.FirstName != nil && u.LastName != nil {
+		return fmt.Sprintf("%s %s", *u.FirstName, *u.LastName)
+	}
+	if u.FirstName != nil {
+		return *u.FirstName
+	}
+	if u.Username != nil {
+		return *u.Username
+	}
+	if u.Email != nil {
+		return *u.Email
+	}
+	return "Unknown User"
+}
+
+func (u *TelegramUser) IsTelegramUser() bool {
+	return u.TelegramID != nil && *u.TelegramID != 0
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
-	"strconv"
+	tgInitData "github.com/telegram-mini-apps/init-data-golang"
 	"time"
 )
 
@@ -75,39 +75,45 @@ func (r *PostgresRepository) CreateUser(ctx context.Context, user *domain.User) 
 	return nil
 }
 
-func (r *PostgresRepository) CreateTelegramUser(ctx context.Context, userTg *domain.TelegramUser) error {
+func (r *PostgresRepository) CreateTelegramUser(ctx context.Context, tgUser tgInitData.User) (*domain.TelegramUser, error) {
 	query := `
-		INSERT INTO users (id, telegram_id, first_name, role, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id
-	`
-	//default values
-	if userTg.ID == uuid.Nil {
-		userTg.ID = uuid.New()
-	}
-	if userTg.Role == "" {
-		userTg.Role = "user" // Default role
-	}
-	now := time.Now()
-	if userTg.CreatedAt.IsZero() {
-		userTg.CreatedAt = now
-	}
-	if userTg.UpdatedAt.IsZero() {
-		userTg.UpdatedAt = now
+        INSERT INTO users (
+            id, telegram_id, first_name, last_name, username, 
+            photo_url, language_code, is_premium, role, created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id
+    `
+
+	user := &domain.TelegramUser{
+		ID:           uuid.New(),
+		TelegramID:   &tgUser.ID,
+		FirstName:    stringPtr(tgUser.FirstName),
+		LastName:     stringPtr(tgUser.LastName),
+		Username:     stringPtr(tgUser.Username),
+		PhotoURL:     stringPtr(tgUser.PhotoURL),
+		LanguageCode: stringPtr(tgUser.LanguageCode),
+		IsPremium:    tgUser.IsPremium,
+		Role:         "user",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
 	}
 
-	var id uuid.UUID
+	var returnedId uuid.UUID
+	err := r.db.QueryRowContext(ctx, query, user.ID, user.TelegramID, user.FirstName, user.LastName,
+		user.Username, user.PhotoURL, user.LanguageCode, user.IsPremium,
+		user.Role, user.CreatedAt, user.UpdatedAt).Scan(&returnedId)
 
-	err := r.db.QueryRowContext(ctx, query, userTg.ID, userTg.User.FirstName, userTg.Role, userTg.CreatedAt, userTg.UpdatedAt).Scan(&id)
 	if err != nil {
 		if isDubpicateKeyError(err) {
-			log.Error().Err(err).Str("tg_id", strconv.FormatInt(userTg.User.ID, 10)).Msg("cannot create user with the same tg id")
-			return ErrConflict
+			log.Error().Err(err).Int64("telegram_id", *user.TelegramID).Msg("telegram user already exists")
+			return nil, ErrConflict
 		}
-		log.Error().Err(err).Msg("failed to create a user")
-		return err
+		log.Error().Err(err).Msg("failed to create telegram user")
+		return nil, err
 	}
-	return nil
+
+	return user, nil
 }
 
 func (r *PostgresRepository) GetUserById(ctx context.Context, id uuid.UUID) (*domain.User, error) {
@@ -131,32 +137,57 @@ func (r *PostgresRepository) GetUserById(ctx context.Context, id uuid.UUID) (*do
 
 func (r *PostgresRepository) GetUserByTelegramID(ctx context.Context, telegramID int64) (*domain.TelegramUser, error) {
 	query := `
-		SELECT id, telegram_id, first_name, last_name, username, role, created_at, updated_at 
-		FROM users 
-		WHERE telegram_id = $1
-	`
+        SELECT id, email, telegram_id, first_name, last_name, username, 
+               photo_url, language_code, is_premium, role, created_at, updated_at
+        FROM users 
+        WHERE telegram_id = $1
+    `
 
 	var user domain.TelegramUser
-	err := r.db.QueryRowContext(ctx, query, telegramID).Scan(
-		&user.ID,
-		&user.TelegramID,
-		&user.FirstName,
-		&user.LastName,
-		&user.Username,
-		&user.Role,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
 
+	err := r.db.GetContext(ctx, &user, query, telegramID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrInvalidField
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
 		}
-		log.Error().Err(err).Int64("telegram_id", telegramID).Msg("failed to get user by Telegram ID")
+		log.Error().Err(err).Int64("telegram_id", telegramID).Msg("failed to get user by telegram ID")
 		return nil, err
 	}
 
 	return &user, nil
+}
+
+func (r *PostgresRepository) UpdateTelegramUser(ctx context.Context, user *domain.TelegramUser) error {
+	query := `
+        UPDATE users 
+        SET first_name = $1, last_name = $2, username = $3, 
+            photo_url = $4, language_code = $5, is_premium = $6, updated_at = $7
+        WHERE telegram_id = $8
+    `
+
+	user.UpdatedAt = time.Now()
+
+	result, err := r.db.ExecContext(
+		ctx, query,
+		user.FirstName, user.LastName, user.Username,
+		user.PhotoURL, user.LanguageCode, user.IsPremium,
+		user.UpdatedAt, user.TelegramID,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update telegram user")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }
 
 func (r *PostgresRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
@@ -376,4 +407,11 @@ func (r *PostgresRepository) DeleteUserSessions(ctx context.Context, userId uuid
 		return err
 	}
 	return nil
+}
+
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

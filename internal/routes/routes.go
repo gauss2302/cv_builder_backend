@@ -13,6 +13,7 @@ import (
 )
 
 func SetupRoutes(db *sqlx.DB, redisClient *redis.Client, jwtConfig auth.JWTConfig) http.Handler {
+	//corsMiddleware := security.CORSMiddleware(security.DefaultCORSConfig())
 	corsMiddleware := security.CORSMiddleware(security.DefaultCORSConfig())
 	mux := http.NewServeMux()
 
@@ -50,7 +51,7 @@ func SetupRoutes(db *sqlx.DB, redisClient *redis.Client, jwtConfig auth.JWTConfi
 	mux.HandleFunc("POST /api/v1/logout", authHandler.LogoutHandler)
 	mux.HandleFunc("POST /api/v1/request-password-reset", authHandler.RequestPasswordResetHandler)
 	mux.HandleFunc("POST /api/v1/reset-password", authHandler.ResetPasswordHandler)
-	mux.HandleFunc("/api/v1/telegramAuth", authHandler.LoginTelegram)
+	mux.HandleFunc("POST /api/v1/auth/telegram", authHandler.LoginTelegram)
 
 	// User profile route
 	mux.Handle("GET /api/v1/user/profile", sessionLogger.LogActivity(authMiddleware.AuthRequired(http.HandlerFunc(userHandler.GetProfileHandler))))

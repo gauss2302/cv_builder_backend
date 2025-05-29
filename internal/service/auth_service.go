@@ -7,7 +7,6 @@ import (
 	"cv_builder/pkg/auth"
 	"cv_builder/pkg/security"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	tgInitData "github.com/telegram-mini-apps/init-data-golang"
@@ -85,30 +84,113 @@ func (s *AuthService) Register(ctx context.Context, email, password, role string
 
 }
 
-func (s *AuthService) RegisterWithTelegram(ctx context.Context, telegramId int64) (*domain.TelegramUser, error) {
-	existingUser, err := s.userRepo.GetUserByTelegramID(ctx, telegramId)
-	if err == nil && existingUser != nil {
-		return nil, ErrUserAlreadyExists
-	} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, err
-	}
-	user := &domain.TelegramUser{
-		ID: uuid.New(),
-		User: tgInitData.User{
-			ID: telegramId,
-		},
+//func (s *AuthService) RegisterWithTelegram(ctx context.Context, telegramId int64) (*domain.TelegramUser, error) {
+//	existingUser, err := s.userRepo.GetUserByTelegramID(ctx, telegramId)
+//	if err == nil && existingUser != nil {
+//		return nil, ErrUserAlreadyExists
+//	} else if err != nil && !errors.Is(err, repository.ErrNotFound) {
+//		return nil, err
+//	}
+//	user := &domain.TelegramUser{
+//		ID: uuid.New(),
+//		User: tgInitData.User{
+//			ID: telegramId,
+//		},
+//	}
+//
+//	fmt.Println(user)
+//	if err := s.userRepo.CreateTelegramUser(ctx, user); err != nil {
+//		log.Error().Err(err).Msg("failed to create tg user")
+//		if errors.Is(err, repository.ErrConflict) {
+//			return nil, ErrUserAlreadyExists
+//		}
+//		return nil, err
+//	}
+//
+//	return user, nil
+//}
+
+func (s *AuthService) LoginWithTelegram(ctx context.Context, initData string, userAgent, clientIP string) (*TokenPair, error) {
+	// Parse Tg init data
+	parsedData, err := tgInitData.Parse(initData)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to pars tg init data")
+		return nil, ErrInvalidCredentials
 	}
 
-	fmt.Println(user)
-	if err := s.userRepo.CreateTelegramUser(ctx, user); err != nil {
-		log.Error().Err(err).Msg("failed to create tg user")
-		if errors.Is(err, repository.ErrConflict) {
-			return nil, ErrUserAlreadyExists
+	//if parsedData.User == nil {
+	//	return nil, ErrInvalidCredentials
+	//}
+
+	// Find existing user
+	user, err := s.userRepo.GetUserByTelegramID(ctx, parsedData.User.ID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		log.Error().Err(err).Msg("failed to get user by tg Id")
+		return nil, err
+	}
+
+	if user == nil {
+		user, err = s.userRepo.CreateTelegramUser(ctx, parsedData.User)
+		if err != nil {
+			if errors.Is(err, repository.ErrConflict) {
+				user, err = s.userRepo.GetUserByTelegramID(ctx, parsedData.User.ID)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				log.Error().Err(err).Msg("failed to create tg user")
+				return nil, err
+			}
 		}
+	} else {
+		user.FirstName = stringPtr(parsedData.User.FirstName)
+		user.LastName = stringPtr(parsedData.User.LastName)
+		user.Username = stringPtr(parsedData.User.Username)
+		user.PhotoURL = stringPtr(parsedData.User.PhotoURL)
+		user.LanguageCode = stringPtr(parsedData.User.LanguageCode)
+		user.IsPremium = parsedData.User.IsPremium
+
+		err = s.userRepo.UpdateTelegramUser(ctx, user)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update telegram user")
+		}
+	}
+
+	// Generate tokens
+	displayName := user.GetDisplayName()
+	accessToken, err := s.jwt.GenerateAccessToken(user.ID.String(), displayName, user.Role)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to generate access token")
 		return nil, err
 	}
 
-	return user, nil
+	refreshToken, err := s.jwt.GenerateRefreshToken(user.ID.String(), displayName, user.Role)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to generate refresh token")
+		return nil, err
+	}
+
+	session := &domain.Session{
+		ID:           uuid.New(),
+		UserID:       user.ID,
+		RefreshToken: refreshToken,
+		UserAgent:    userAgent,
+		ClientIP:     clientIP,
+		ExpiresAt:    time.Now().Add(s.config.RefreshTokenExpiry),
+		CreatedAt:    time.Now(),
+	}
+
+	if err := s.userRepo.CreateSession(ctx, session); err != nil {
+		log.Error().Err(err).Msg("failed to create session")
+		return nil, err
+	}
+
+	return &TokenPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int64(s.config.AccessTokenExpiry.Seconds()),
+	}, nil
+
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password, userAgent, clientIP string) (*TokenPair, error) {
@@ -366,4 +448,11 @@ func (s *AuthService) ValidateAccessToken(accessToken string) (*auth.JWTClaims, 
 		return nil, ErrInvalidToken
 	}
 	return claims, err
+}
+
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

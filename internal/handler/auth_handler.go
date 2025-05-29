@@ -322,16 +322,14 @@ func (h *AuthHandler) applyRateLimit(w http.ResponseWriter, r *http.Request) boo
 }
 
 func (h *AuthHandler) LoginTelegram(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+	// Apply rate limiting
 	if ok := h.applyRateLimit(w, r); !ok {
 		return
 	}
 
+	// Parse request
 	var req TelegramRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		RespondWithError(w, http.StatusBadRequest, "Invalid request body", "INVALID_REQUEST")
@@ -339,31 +337,53 @@ func (h *AuthHandler) LoginTelegram(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.InitData == "" {
-		http.Error(w, "initData parameter is missing", http.StatusBadRequest)
+		RespondWithError(w, http.StatusBadRequest, "initData parameter is missing", "INVALID_REQUEST")
 		return
 	}
 
-	const MY_BOT_TOKEN = "7754477817:AAGYrJrfTfmaG-rE4Tv7gctnFU9qF4CXFYc"
+	// Load config for bot token
+	cfg, err := config.Load()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to load config")
+		RespondWithError(w, http.StatusInternalServerError, "Configuration error", "INTERNAL_SERVER_ERROR")
+		return
+	}
+
+	if cfg.TelegramBotToken == "" {
+		log.Error().Msg("telegram bot token not configured")
+		RespondWithError(w, http.StatusInternalServerError, "Telegram authentication not configured", "INTERNAL_SERVER_ERROR")
+		return
+	}
+
+	// Validate Telegram init data
 	const INIT_DATA_EXPIRATION = 3 * time.Hour
 
-	cfg, _ := config.Load()
-
-	botToken := cfg.TelegramBotToken
-
-	err := tgInitData.Validate(req.InitData, botToken, INIT_DATA_EXPIRATION)
+	err = tgInitData.Validate(req.InitData, cfg.TelegramBotToken, INIT_DATA_EXPIRATION)
 	if err != nil {
-		log.Printf("Validation error: %v\n", err)
-		RespondWithError(w, http.StatusUnauthorized, "Failed to validate", "TG_VALIDATION_FAILED")
+		log.Error().Err(err).Msg("telegram init data validation failed")
+		RespondWithError(w, http.StatusUnauthorized, "Invalid Telegram authentication data", "TG_VALIDATION_FAILED")
 		return
 	}
 
-	parsedData, err := tgInitData.Parse(req.InitData)
+	// Get client info
+	userAgent := r.UserAgent()
+	clientIP := getClientIP(r)
+
+	// Login with Telegram
+	tokens, err := h.authService.LoginWithTelegram(ctx, req.InitData, userAgent, clientIP)
 	if err != nil {
-		log.Printf("Parsing error: %v\n", err)
-		RespondWithError(w, http.StatusInternalServerError, "Failed to parse data", "TG_PARSE_ERROR")
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			RespondWithError(w, http.StatusUnauthorized, "Invalid Telegram authentication", "INVALID_CREDENTIALS")
+			return
+		}
+		log.Error().Err(err).Msg("failed to login with telegram")
+		RespondWithError(w, http.StatusInternalServerError, "Login failed", "LOGIN_FAILED")
 		return
 	}
 
-	fmt.Println(parsedData) // For development logging
-	RespondWithJSON(w, http.StatusOK, parsedData)
+	// Return tokens
+	RespondWithJSON(w, http.StatusOK, map[string]any{
+		"message": "Telegram login successful",
+		"tokens":  tokens,
+	})
 }
