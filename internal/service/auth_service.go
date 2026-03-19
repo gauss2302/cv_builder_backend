@@ -111,16 +111,18 @@ func (s *AuthService) Register(ctx context.Context, email, password, role string
 //}
 
 func (s *AuthService) LoginWithTelegram(ctx context.Context, initData string, userAgent, clientIP string) (*TokenPair, error) {
+
+	err := tgInitData.Validate(initData, "OUR_TOKEN", time.Duration(3))
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse Tg init data
 	parsedData, err := tgInitData.Parse(initData)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to pars tg init data")
 		return nil, ErrInvalidCredentials
 	}
-
-	//if parsedData.User == nil {
-	//	return nil, ErrInvalidCredentials
-	//}
 
 	// Find existing user
 	user, err := s.userRepo.GetUserByTelegramID(ctx, parsedData.User.ID)
@@ -158,7 +160,7 @@ func (s *AuthService) LoginWithTelegram(ctx context.Context, initData string, us
 
 	// Generate tokens
 	displayName := user.GetDisplayName()
-	accessToken, err := s.jwt.GenerateAccessToken(user.ID.String(), displayName, user.Role)
+	  , err := s.jwt.GenerateAccessToken(user.ID.String(), displayName, user.Role)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to generate access token")
 		return nil, err

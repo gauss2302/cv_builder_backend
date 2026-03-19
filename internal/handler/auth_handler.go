@@ -78,7 +78,8 @@ func (h *AuthHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate request
 	if err := h.validator.Struct(req); err != nil {
-		validationErrors := err.(validator.ValidationErrors)
+		var validationErrors validator.ValidationErrors
+		errors.As(err, &validationErrors)
 		RespondWithValidationError(w, validationErrors)
 		return
 	}

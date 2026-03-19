@@ -3,9 +3,10 @@ package domain
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	tgInitData "github.com/telegram-mini-apps/init-data-golang"
-	"time"
 )
 
 type User struct {

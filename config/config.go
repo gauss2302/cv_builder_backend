@@ -19,7 +19,7 @@ type Config struct {
 
 // Load loads configuration from environment variables with validation
 func Load() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load(".env"); err != nil {
 		log.Info().Msg("No .env file found, using environment variables")
 	}
 

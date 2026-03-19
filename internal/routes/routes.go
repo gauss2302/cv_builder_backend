@@ -13,7 +13,6 @@ import (
 )
 
 func SetupRoutes(db *sqlx.DB, redisClient *redis.Client, jwtConfig auth.JWTConfig) http.Handler {
-	//corsMiddleware := security.CORSMiddleware(security.DefaultCORSConfig())
 	corsMiddleware := security.CORSMiddleware(security.DefaultCORSConfig())
 	mux := http.NewServeMux()
 
